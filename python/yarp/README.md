@@ -18,6 +18,7 @@ These lines should run before any other code in the user's application.
 
 ## yarp.json
 
+This file is also called `manifest` inside the code sometimes  
 ```json
 {
     // shared libraries loaded using `dlopen`
@@ -27,20 +28,22 @@ These lines should run before any other code in the user's application.
         },
     ],
     // all imported python modules, including imported c extensions
-    "modules": [
-        {
-            // extension
-            "name": "fontTools.varLib.iup",
-            "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so",
-            "kind": "extension",
-        },
-        {
-            // pure python
-            "name": "click",
-            "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/click",
-            "kind": "pure",
-        }
-    ]
+    "modules": {
+        "pure": [
+            {
+                // pure python
+                "name": "click",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/click",
+            }
+        ],
+        "extensions": [
+            {
+                // extension
+                "name": "fontTools.varLib.iup",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so",
+            },
+        ]
+    },
     // python interpreter information
     "python": {
         "sys": {
