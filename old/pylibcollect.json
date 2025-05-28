@@ -1,0 +1,514 @@
+{
+    "direct_loads": [
+        {
+            "kind": "imported",
+            "name": "_asyncio",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_asyncio.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_socket.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_curses_panel.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/xxsubtype.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_posixshmem.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/unicodedata2.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_kr.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_lzma.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/readline.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_asyncio.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_sha2.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "unicodedata",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/unicodedata.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_tkinter.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_heapq",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_heapq.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_sha1.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_multiprocessing",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_multiprocessing.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_random.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/resource.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_ssl.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/grp.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_curses.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/audioop.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "numpy._core._multiarray_umath",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/numpy/_core/_multiarray_umath.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_decimal.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_tw.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_statistics.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_dbm.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "PIL._imaging",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/PIL/_imaging.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/syslog.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/mmap.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "fontTools.varLib.iup",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/xxlimited_35.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/pyexpat.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_ctypes.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_jp.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_contextvars",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_contextvars.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_xxtestfuzz.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "cmath",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/cmath.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_datetime",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_datetime.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/select.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_posixsubprocess.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testimportmultiple.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testcapi.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_hashlib",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_hashlib.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_hashlib.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_json",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_json.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_blake2.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_scproxy.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_brotli",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/_brotli.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_cn.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_json.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_crypt.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/binascii.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_hk.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/_cffi_backend.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_posixsubprocess",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_posixsubprocess.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/math.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_blake2",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_blake2.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/unicodedata.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_csv.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_sha3.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_elementtree.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_codecs_iso2022.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "fontTools.misc.bezierTools",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/fontTools/misc/bezierTools.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_cffi_backend",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/_cffi_backend.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_csv",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_csv.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "cv2",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/cv2/cv2.abi3.so"
+        },
+        {
+            "kind": "imported",
+            "name": "grp",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/grp.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_ssl",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_ssl.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testbuffer.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_multibytecodec.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_uuid.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_sqlite3.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "array",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/array.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_uuid",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_uuid.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_struct.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "mmap",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/mmap.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "fcntl",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/fcntl.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_lsprof.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "binascii",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/binascii.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_xxsubinterpreters.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/fcntl.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_opcode.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_ctypes_test.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/termios.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_scproxy",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_scproxy.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_queue.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/xxlimited.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "numpy.linalg._umath_linalg",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/numpy/linalg/_umath_linalg.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "pyexpat",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/pyexpat.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/array.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/zlib.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/_brotli.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_datetime.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "select",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/select.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "torch._C",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/torch/_C.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_xxinterpchannels.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/cmath.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_socket",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_socket.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_bz2.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testsinglephase.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/nis.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_pickle.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_bisect.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages/torch/lib/libtorch_global_deps.dylib"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_contextvars.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_queue",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_queue.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_zoneinfo.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testmultiphase.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_md5.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_elementtree",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_elementtree.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testinternalcapi.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_multiprocessing.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_testclinic.cpython-312-darwin.so"
+        },
+        {
+            "kind": "dlopened",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_heapq.cpython-312-darwin.so"
+        },
+        {
+            "kind": "imported",
+            "name": "_pickle",
+            "path": "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload/_pickle.cpython-312-darwin.so"
+        }
+    ],
+    "py": {
+        "path": "/Users/hariomnarang/miniconda3/envs/linker/bin/python",
+        "prefix": "/Users/hariomnarang/miniconda3/envs/linker",
+        "python_path": [
+            "/Users/hariomnarang/Desktop/work/blog/linker-python",
+            "/Users/hariomnarang/miniconda3/envs/linker/lib/python312.zip",
+            "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12",
+            "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/lib-dynload",
+            "/Users/hariomnarang/miniconda3/envs/linker/lib/python3.12/site-packages"
+        ]
+    }
+}
