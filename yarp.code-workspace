@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+			"path": "python/yarp"
+		},
+		{
+			"path": "old"
+		},
+		{
+			"path": "crates/yarp_rs"
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"abiflags",
+			"cpython",
+			"dlopen",
+			"dynload",
+			"hariomnarang",
+			"libpango",
+			"petgraph",
+			"platlibdir",
+			"toposort",
+			"Yarp"
+		]
+	}
+}

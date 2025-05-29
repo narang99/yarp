@@ -1,0 +1,420 @@
+{
+    "loads": [
+        {"path": "/Users/hariomnarang/miniconda3/lib/libpango.so"},
+        {"path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/linalg/np-will-dlopen.so"}
+    ],
+    "modules": {
+        "extensions": [
+            {
+                "name": "numpy._core._multiarray_umath",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_multiarray_umath.cpython-312-darwin.so"
+            },
+            {
+                "name": "numpy.linalg._umath_linalg",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/linalg/_umath_linalg.cpython-312-darwin.so"
+            },
+            {
+                "name": "_pickle",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/lib-dynload/_pickle.cpython-312-darwin.so"
+            },
+            {
+                "name": "_datetime",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/lib-dynload/_datetime.cpython-312-darwin.so"
+            },
+            {
+                "name": "_contextvars",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/lib-dynload/_contextvars.cpython-312-darwin.so"
+            },
+            {
+                "name": "some_c_extension",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/some_c_extension.so"
+            }
+        ],
+        "pure": [
+            {
+                "name": "_compat_pickle",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/_compat_pickle.py"
+            },
+            {
+                "name": "numpy.lib.scimath",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/scimath.py"
+            },
+            {
+                "name": "numpy.lib._arraysetops_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_arraysetops_impl.py"
+            },
+            {
+                "name": "numpy.lib._nanfunctions_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_nanfunctions_impl.py"
+            },
+            {
+                "name": "numpy._core._exceptions",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_exceptions.py"
+            },
+            {
+                "name": "numpy._core.function_base",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/function_base.py"
+            },
+            {
+                "name": "numpy._typing._scalars",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_scalars.py"
+            },
+            {
+                "name": "numpy.lib.format",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/format.py"
+            },
+            {
+                "name": "numpy.lib._arrayterator_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_arrayterator_impl.py"
+            },
+            {
+                "name": "numpy._utils",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_utils/__init__.py"
+            },
+            {
+                "name": "numpy._array_api_info",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_array_api_info.py"
+            },
+            {
+                "name": "numpy._core.fromnumeric",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/fromnumeric.py"
+            },
+            {
+                "name": "numpy._core.arrayprint",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/arrayprint.py"
+            },
+            {
+                "name": "numpy._core.records",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/records.py"
+            },
+            {
+                "name": "numpy._core.printoptions",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/printoptions.py"
+            },
+            {
+                "name": "numpy._typing._nbit",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_nbit.py"
+            },
+            {
+                "name": "platform",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/platform.py"
+            },
+            {
+                "name": "numpy.lib._index_tricks_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_index_tricks_impl.py"
+            },
+            {
+                "name": "numpy.dtypes",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/dtypes.py"
+            },
+            {
+                "name": "numpy._core._type_aliases",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_type_aliases.py"
+            },
+            {
+                "name": "numpy.lib._datasource",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_datasource.py"
+            },
+            {
+                "name": "numpy.lib.mixins",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/mixins.py"
+            },
+            {
+                "name": "numpy.lib._scimath_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_scimath_impl.py"
+            },
+            {
+                "name": "numpy._core._dtype",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_dtype.py"
+            },
+            {
+                "name": "numpy._core.umath",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/umath.py"
+            },
+            {
+                "name": "numpy.lib._array_utils_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_array_utils_impl.py"
+            },
+            {
+                "name": "numpy._typing._ufunc",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_ufunc.py"
+            },
+            {
+                "name": "numpy.lib._type_check_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_type_check_impl.py"
+            },
+            {
+                "name": "numpy._utils._inspect",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_utils/_inspect.py"
+            },
+            {
+                "name": "numpy._core._methods",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_methods.py"
+            },
+            {
+                "name": "numpy._typing._nbit_base",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_nbit_base.py"
+            },
+            {
+                "name": "numpy.matrixlib",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/matrixlib/__init__.py"
+            },
+            {
+                "name": "numpy._expired_attrs_2_0",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_expired_attrs_2_0.py"
+            },
+            {
+                "name": "pickle",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/pickle.py"
+            },
+            {
+                "name": "numpy.lib._arraypad_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_arraypad_impl.py"
+            },
+            {
+                "name": "numpy.lib._twodim_base_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_twodim_base_impl.py"
+            },
+            {
+                "name": "numpy._core.einsumfunc",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/einsumfunc.py"
+            },
+            {
+                "name": "numpy._core.overrides",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/overrides.py"
+            },
+            {
+                "name": "numpy._core.memmap",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/memmap.py"
+            },
+            {
+                "name": "numpy.lib._ufunclike_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_ufunclike_impl.py"
+            },
+            {
+                "name": "numpy.lib._polynomial_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_polynomial_impl.py"
+            },
+            {
+                "name": "numpy._core._ufunc_config",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_ufunc_config.py"
+            },
+            {
+                "name": "numpy._typing._dtype_like",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_dtype_like.py"
+            },
+            {
+                "name": "numpy._typing",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/__init__.py"
+            },
+            {
+                "name": "numpy._typing._array_like",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_array_like.py"
+            },
+            {
+                "name": "numpy._core._string_helpers",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_string_helpers.py"
+            },
+            {
+                "name": "numpy.version",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/version.py"
+            },
+            {
+                "name": "textwrap",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/textwrap.py"
+            },
+            {
+                "name": "numpy._core._asarray",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_asarray.py"
+            },
+            {
+                "name": "numpy._pytesttester",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_pytesttester.py"
+            },
+            {
+                "name": "numpy._distributor_init",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_distributor_init.py"
+            },
+            {
+                "name": "numpy._core.numeric",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/numeric.py"
+            },
+            {
+                "name": "numpy.exceptions",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/exceptions.py"
+            },
+            {
+                "name": "numpy._core.shape_base",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/shape_base.py"
+            },
+            {
+                "name": "contextvars",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/contextvars.py"
+            },
+            {
+                "name": "numpy._core.multiarray",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/multiarray.py"
+            },
+            {
+                "name": "numpy.lib._iotools",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_iotools.py"
+            },
+            {
+                "name": "numpy.lib._utils_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_utils_impl.py"
+            },
+            {
+                "name": "numpy.lib._version",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_version.py"
+            },
+            {
+                "name": "numpy._globals",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_globals.py"
+            },
+            {
+                "name": "numpy.lib._npyio_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_npyio_impl.py"
+            },
+            {
+                "name": "numpy.lib",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/__init__.py"
+            },
+            {
+                "name": "numpy._core.numerictypes",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/numerictypes.py"
+            },
+            {
+                "name": "numpy._utils._convertions",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_utils/_convertions.py"
+            },
+            {
+                "name": "numpy._core",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/__init__.py"
+            },
+            {
+                "name": "numpy.lib.array_utils",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/array_utils.py"
+            },
+            {
+                "name": "numpy.linalg._linalg",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/linalg/_linalg.py"
+            },
+            {
+                "name": "numpy._core._dtype_ctypes",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_dtype_ctypes.py"
+            },
+            {
+                "name": "numpy.__config__",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/__config__.py"
+            },
+            {
+                "name": "numpy._core._add_newdocs",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_add_newdocs.py"
+            },
+            {
+                "name": "numpy._core.getlimits",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/getlimits.py"
+            },
+            {
+                "name": "numpy.matrixlib.defmatrix",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/matrixlib/defmatrix.py"
+            },
+            {
+                "name": "numbers",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/numbers.py"
+            },
+            {
+                "name": "numpy.linalg.linalg",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/linalg/linalg.py"
+            },
+            {
+                "name": "numpy.lib.npyio",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/npyio.py"
+            },
+            {
+                "name": "numpy.lib._histograms_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_histograms_impl.py"
+            },
+            {
+                "name": "datetime",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/datetime.py"
+            },
+            {
+                "name": "__future__",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/__future__.py"
+            },
+            {
+                "name": "numpy.lib.stride_tricks",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/stride_tricks.py"
+            },
+            {
+                "name": "numpy._core._add_newdocs_scalars",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_add_newdocs_scalars.py"
+            },
+            {
+                "name": "numpy.lib._stride_tricks_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_stride_tricks_impl.py"
+            },
+            {
+                "name": "numpy.linalg",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/linalg/__init__.py"
+            },
+            {
+                "name": "numpy._core._internal",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_internal.py"
+            },
+            {
+                "name": "numpy._typing._shape",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_shape.py"
+            },
+            {
+                "name": "numpy._typing._nested_sequence",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_nested_sequence.py"
+            },
+            {
+                "name": "numpy.lib._function_base_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_function_base_impl.py"
+            },
+            {
+                "name": "numpy.lib.introspect",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/introspect.py"
+            },
+            {
+                "name": "numpy._core._machar",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_core/_machar.py"
+            },
+            {
+                "name": "numpy._typing._char_codes",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/_typing/_char_codes.py"
+            },
+            {
+                "name": "numpy",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/__init__.py"
+            },
+            {
+                "name": "numpy.lib._shape_base_impl",
+                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/numpy/lib/_shape_base_impl.py"
+            }
+        ]
+    },
+    "python": {
+        "sys": {
+            "prefix": "/Users/hariomnarang/miniconda3",
+            "exec_prefix": "/Users/hariomnarang/miniconda3",
+            "platlibdir": "lib",
+            "version": {
+                "major": 3,
+                "minor": 12,
+                "abi_thread": ""
+            },
+            "path": [
+                "/Users/hariomnarang/Desktop/work/blog/linker/yarp/python/yarp/src",
+                "/Users/hariomnarang/miniconda3/lib/python312.zip",
+                "/Users/hariomnarang/miniconda3/lib/python3.12",
+                "/Users/hariomnarang/miniconda3/lib/python3.12/lib-dynload",
+                "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages"
+            ],
+            "executable": "/Users/hariomnarang/miniconda3/bin/python"
+        }
+    }
+}
