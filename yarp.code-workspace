@@ -15,11 +15,15 @@
 			"abiflags",
 			"cpython",
 			"dlopen",
+			"dylib",
 			"dynload",
+			"ftypes",
 			"hariomnarang",
 			"libpango",
 			"petgraph",
 			"platlibdir",
+			"rpath",
+			"rpaths",
 			"toposort",
 			"Yarp"
 		]

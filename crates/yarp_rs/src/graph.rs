@@ -1,14 +1,38 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 use anyhow::{Context, Result, anyhow};
 use petgraph::{Graph, algo::toposort, graph::NodeIndex};
 
 use crate::node::{DistNode, Node};
 
+#[derive(Debug)]
 pub struct FileGraph {
     inner: Graph<(), ()>,
     idx_by_dist_node: HashMap<NodeIndex, DistNode>,
     node_by_idx: HashMap<Rc<Node>, NodeIndex>,
+}
+
+impl Display for FileGraph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            for node_idx in self.inner.node_indices() {
+            let node = self
+                .idx_by_dist_node
+                .get(&node_idx)
+                .expect("corrupted graph state");
+            write!(f, "{} -> ", node)?;
+
+            let mut neighbors = Vec::new();
+            for neighbor_idx in self.inner.neighbors(node_idx) {
+                let neighbor = self
+                    .idx_by_dist_node
+                    .get(&neighbor_idx)
+                    .expect("corrupted graph state");
+                neighbors.push(format!("{}", neighbor));
+            }
+            writeln!(f, "[{}]", neighbors.join(", "))?;
+        }
+        Ok(())
+    }
 }
 
 impl FileGraph {
@@ -38,6 +62,7 @@ impl FileGraph {
             return Ok(());
         }
         // we get the deps first because we move the node inside the graph later
+        let our_path = f.dist_file.file_path().clone();
         let deps = f.dist_file.deps()?;
 
         let idx = self.inner.add_node(());
@@ -47,7 +72,7 @@ impl FileGraph {
 
         for d in deps {
             let parent_node = Rc::clone(&d.node);
-            self.add_node(d)?;
+            self.add_node(d).context(anyhow!("file: {}", our_path.to_string_lossy()))?;
             self.add_edge(&parent_node, &our_node);
         }
 
@@ -80,11 +105,12 @@ mod test {
     #[derive(Debug)]
     struct MockDistFile {
         deps: Vec<DistNode>,
+        mock_path: PathBuf
     }
 
     impl MockDistFile {
         fn new(deps: Vec<DistNode>) -> Self {
-            Self { deps }
+            Self { deps, mock_path: PathBuf::from("hello") }
         }
     }
 
@@ -93,6 +119,10 @@ mod test {
             Ok(self.deps.clone())
         }
 
+
+        fn file_path(&self) -> &PathBuf {
+            &self.mock_path
+        }
         // fn to_reals(&self, _unit_root: PathBuf) {
         //     // Mock implementation - no-op
         // }
