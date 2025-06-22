@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
 /// an example json is in this test module, code is duplicated between `python/yarp` and our crate
 /// both should always be synced 
@@ -10,9 +12,20 @@ pub struct YarpManifest {
     pub python: Python,
 }
 
+
+pub trait AssociatedFile {
+    fn get_path(&self) -> &str;
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
     pub path: String,
+}
+
+impl AssociatedFile for Load {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -27,11 +40,24 @@ pub struct Pure {
     pub path: String,
 }
 
+impl AssociatedFile for Pure {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Extension {
     pub name: String,
     pub path: String,
 }
+
+impl AssociatedFile for Extension {
+    fn get_path(&self) -> &str {
+        &self.path
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Python {
     pub sys: Sys,

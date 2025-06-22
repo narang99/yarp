@@ -22,6 +22,7 @@
 			"libpango",
 			"petgraph",
 			"platlibdir",
+			"pures",
 			"rpath",
 			"rpaths",
 			"toposort",

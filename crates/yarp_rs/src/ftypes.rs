@@ -8,6 +8,21 @@ use crate::{
 };
 
 #[derive(Debug)]
+pub struct PyFile {
+    pub path: PathBuf,
+}
+
+impl DistFile for PyFile {
+    fn deps(&self) -> Result<Vec<DistNode>> {
+        Ok(Vec::new()) 
+    }
+
+    fn file_path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+#[derive(Debug)]
 pub struct PythonExe {
     pub path: PathBuf,
     pub cwd: PathBuf,
@@ -37,6 +52,19 @@ pub struct Dylib {
     pub executable_path: PathBuf,
     pub cwd: PathBuf,
     pub path: PathBuf,
+}
+
+impl Dylib {
+    pub fn file_name_from_path(path: &PathBuf) -> Result<String> {
+        path.file_name().ok_or_else(|| {
+            anyhow!(
+                "failed in getting file_name for dependency, path={}",
+                path.display()
+            )
+        }).and_then(|file_name| {
+            file_name.to_str().ok_or(anyhow!("failed in converting path of file to string, this most likely contains non-utf-8 characters in path, path={}", path.display()))
+        }).map(|file_name| file_name.to_string())
+    }
 }
 
 impl DistFile for Dylib {
@@ -80,14 +108,7 @@ fn get_deps_of_macho(
 }
 
 fn dist_node_from_dylib(dylib: Dylib) -> Result<DistNode> {
-    let file_name = dylib.path.file_name().ok_or_else(|| {
-        anyhow!(
-            "failed in getting file_name for dependency, path={}",
-            dylib.path.display()
-        )
-    }).and_then(|file_name| {
-        file_name.to_str().ok_or(anyhow!("failed in converting path of file to string, this most likely contains non-utf-8 characters in path, path={}", dylib.path.display()))
-    })?;
+    let file_name = Dylib::file_name_from_path(&dylib.path)?;
 
     let node = Node {
         kind: Kind::SharedLibrary {
