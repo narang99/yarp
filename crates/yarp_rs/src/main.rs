@@ -6,7 +6,6 @@ use crate::manifest::YarpManifest;
 pub mod ftypes;
 pub mod gather;
 pub mod graph;
-pub mod macho;
 pub mod manifest;
 pub mod node;
 

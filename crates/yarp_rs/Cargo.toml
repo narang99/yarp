@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+bimap = "0.6.3"
 env_logger = "0.11.8"
 lief = "0.16.5"
 log = "0.4.27"

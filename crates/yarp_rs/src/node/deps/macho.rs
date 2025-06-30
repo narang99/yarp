@@ -19,30 +19,47 @@ struct PathResolverCtx<'a> {
 }
 
 #[derive(Debug)]
-pub struct SharedLibCtx<'a> {
-    pub executable_path: &'a PathBuf,
-    pub cwd: &'a PathBuf,
+struct SharedLibCtx<'a> {
+    executable_path: &'a PathBuf,
+    cwd: &'a PathBuf,
 }
 
-pub struct Macho {
+struct Macho {
     // all load commands, along with the resolved path of the dependency
-    pub load_cmds: HashMap<String, PathBuf>,
+    load_cmds: HashMap<String, PathBuf>,
 
     // all rpaths, along with resolved rpath
-    pub rpaths: HashMap<String, PathBuf>,
+    rpaths: HashMap<String, PathBuf>,
 
     // the current id of the dylib
-    pub id_dylib: Option<String>,
+    id_dylib: Option<String>,
 
     // path to the lib
-    pub path: PathBuf,
+    path: PathBuf,
+}
+
+pub fn get_deps(
+    macho_path: &PathBuf,
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+) -> Result<Vec<PathBuf>> {
+    let string_path = macho_path.to_str().ok_or(anyhow!(
+        "path {} could not be converted to string, `yarp` does not support these paths",
+        macho_path.display()
+    ))?;
+    let ctx = SharedLibCtx {
+        executable_path,
+        cwd,
+    };
+    let macho = parse(&string_path, &ctx)?;
+    Ok(macho.load_cmds.into_iter().map(|(_, path)| path).collect())
 }
 
 /// parse a macho file and get its dependencies
 /// Parsing logic depends on three kinds of paths
 /// First is an actual path, denoted by Path/PathBuf
 /// Second is a string path that needs resolution
-pub fn parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
+fn parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
     _parse(macho_path, ctx)
         .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path, ctx))
 }
@@ -237,23 +254,3 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
         }
     }
 }
-
-// fn pretty_bullet_points_for_paths(paths: &Vec<PathBuf>) -> String {
-//     let strings: Vec<String> = paths
-//         .iter()
-//         .map(|p| format!("{}", p.to_string_lossy()))
-//         .collect();
-//     pretty_bullet_points(&strings)
-// }
-
-// fn pretty_bullet_points(strings: &Vec<impl Display>) -> String {
-//     strings
-//         .iter()
-//         .map(|p| pretty_bullet_point(p))
-//         .collect::<Vec<_>>()
-//         .join("\n")
-// }
-
-// fn pretty_bullet_point(string: impl Display) -> String {
-//     format!("- {}", string)
-// }
