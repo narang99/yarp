@@ -28,31 +28,6 @@ impl DistFile for PlainFile {
     }
 }
 
-// #[derive(Debug)]
-// pub struct PythonExe {
-//     pub path: PathBuf,
-//     pub cwd: PathBuf,
-// }
-
-// impl DistFile for PythonExe {
-//     fn deps(&self) -> Result<Vec<crate::node::DistNode>> {
-//         let ctx = SharedLibCtx {
-//             executable_path: &self.path,
-//             cwd: &self.cwd,
-//         };
-//         get_deps_of_macho(&self.path, &ctx).with_context(|| {
-//             anyhow!(
-//                 "failure in resolving dependencies of library={}",
-//                 self.path.display()
-//             )
-//         })
-//     }
-
-//     fn file_path(&self) -> &std::path::PathBuf {
-//         &self.path
-//     }
-// }
-
 #[derive(Debug)]
 pub struct BinaryFile {
     pub executable_path: PathBuf,

@@ -1,16 +1,6 @@
 use anyhow::Result;
 use std::{fmt::Display, path::PathBuf, rc::Rc};
 
-/// `Kind` is used to differentiate between values which require separate handling
-/// `Python` kind denotes a python executable, only one of its kind can be present
-/// `SharedLibrary` kind denotes a shared library, equality checking is done using only name
-/// `PyFile` is unique for every `src_path`
-// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-// pub enum Kind {
-//     Python,
-//     SharedLibrary { lib_path: PathBuf },
-//     PyFile { src_path: PathBuf },
-// }
 
 /// every file that is tracked by yarp has to implement this trait
 /// it denotes a single file whose dependencies are moved into dist
@@ -41,10 +31,6 @@ pub trait DistFile: std::fmt::Debug {
 
 /// a single node in the graph
 /// this needs to be hashable as we use this as a core unit of our graph operations
-/// Each node is a unit which has dependencies, and is placed in the final dist
-/// differentiating nodes is done by their `kind`
-/// Nodes can contain other information in their `inner` dyn box, this information is simply
-/// Whatever we need implement the box's trait
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Node {
     pub path: PathBuf,
