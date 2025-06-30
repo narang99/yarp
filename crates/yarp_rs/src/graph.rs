@@ -1,10 +1,10 @@
-use std::{fmt::Display, path::PathBuf, rc::Rc};
+use std::{fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
 use petgraph::{Graph, algo::toposort, graph::NodeIndex};
 
-use crate::node::{Node, deps::Deps};
+use crate::node::Node;
 
 #[derive(Debug)]
 pub struct FileGraph {
@@ -116,7 +116,7 @@ impl FileGraph {
 mod test {
 
     use super::*;
-    use anyhow::Result;
+    
     use std::{path::PathBuf, str::FromStr};
 
     fn get_graph() -> FileGraph {
