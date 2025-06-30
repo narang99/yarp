@@ -1,18 +1,24 @@
+/**
+ * All file types that we handle in yarp
+ * A file can be either a binary file or a plain file
+ * This module takes care of creating `DistFile` implementations for every kind of node in the wild
+ * We attach `DistNode` from this
+ */
 use std::{path::PathBuf, rc::Rc};
 
 use anyhow::{Context, Result, anyhow};
 
 use crate::{
     macho::{SharedLibCtx, parse},
-    node::{DistFile, DistNode, Kind, Node},
+    node::{DistFile, DistNode, Node},
 };
 
-// this can be any resource file inside a site-packages
+
 #[derive(Debug)]
-pub struct UnknownFileInSitePackages {
+pub struct PlainFile {
     pub path: PathBuf,
 }
-impl DistFile for UnknownFileInSitePackages {
+impl DistFile for PlainFile {
     fn deps(&self) -> Result<Vec<DistNode>> {
         Ok(Vec::new())
     }
@@ -22,54 +28,39 @@ impl DistFile for UnknownFileInSitePackages {
     }
 }
 
-#[derive(Debug)]
-pub struct PyFileInSitePackages {
-    pub path: PathBuf,
-}
+// #[derive(Debug)]
+// pub struct PythonExe {
+//     pub path: PathBuf,
+//     pub cwd: PathBuf,
+// }
 
-impl DistFile for PyFileInSitePackages {
-    fn deps(&self) -> Result<Vec<DistNode>> {
-        Ok(Vec::new())
-    }
+// impl DistFile for PythonExe {
+//     fn deps(&self) -> Result<Vec<crate::node::DistNode>> {
+//         let ctx = SharedLibCtx {
+//             executable_path: &self.path,
+//             cwd: &self.cwd,
+//         };
+//         get_deps_of_macho(&self.path, &ctx).with_context(|| {
+//             anyhow!(
+//                 "failure in resolving dependencies of library={}",
+//                 self.path.display()
+//             )
+//         })
+//     }
 
-    fn file_path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-#[derive(Debug)]
-pub struct PythonExe {
-    pub path: PathBuf,
-    pub cwd: PathBuf,
-}
-
-impl DistFile for PythonExe {
-    fn deps(&self) -> Result<Vec<crate::node::DistNode>> {
-        let ctx = SharedLibCtx {
-            executable_path: &self.path,
-            cwd: &self.cwd,
-        };
-        get_deps_of_macho(&self.path, &ctx).with_context(|| {
-            anyhow!(
-                "failure in resolving dependencies of library={}",
-                self.path.display()
-            )
-        })
-    }
-
-    fn file_path(&self) -> &std::path::PathBuf {
-        &self.path
-    }
-}
+//     fn file_path(&self) -> &std::path::PathBuf {
+//         &self.path
+//     }
+// }
 
 #[derive(Debug)]
-pub struct Dylib {
+pub struct BinaryFile {
     pub executable_path: PathBuf,
     pub cwd: PathBuf,
     pub path: PathBuf,
 }
 
-impl Dylib {
+impl BinaryFile {
     pub fn file_name_from_path(path: &PathBuf) -> Result<String> {
         path.file_name().ok_or_else(|| {
             anyhow!(
@@ -82,12 +73,13 @@ impl Dylib {
     }
 }
 
-impl DistFile for Dylib {
+impl DistFile for BinaryFile {
     fn deps(&self) -> Result<Vec<DistNode>> {
         let ctx = SharedLibCtx {
             executable_path: &self.executable_path,
             cwd: &self.cwd,
         };
+        // for now we hardcode for getting macho deps
         get_deps_of_macho(&self.path, &ctx).with_context(|| {
             anyhow!(
                 "failure in resolving dependencies of library={}",
@@ -113,7 +105,7 @@ fn get_deps_of_macho(
     macho
         .load_cmds
         .into_iter()
-        .map(|(_, path)| Dylib {
+        .map(|(_, path)| BinaryFile {
             executable_path: ctx.executable_path.clone(),
             cwd: ctx.cwd.clone(),
             path: path,
@@ -122,12 +114,8 @@ fn get_deps_of_macho(
         .collect()
 }
 
-fn dist_node_from_dylib(dylib: Dylib) -> Result<DistNode> {
-    let node = Node {
-        kind: Kind::SharedLibrary {
-            lib_path: dylib.path.clone(),
-        },
-    };
+fn dist_node_from_dylib(dylib: BinaryFile) -> Result<DistNode> {
+    let node = Node { path: dylib.path.clone() };
     Ok(DistNode {
         node: Rc::new(node),
         dist_file: Rc::new(dylib),
@@ -138,12 +126,12 @@ fn dist_node_from_dylib(dylib: Dylib) -> Result<DistNode> {
 mod test {
     use std::path::PathBuf;
 
-    use crate::{ftypes::Dylib, node::DistFile};
+    use crate::{ftypes::BinaryFile, node::DistFile};
 
     // todo: this only works on my machine
     #[test]
     fn test_local() {
-        let dylib = Dylib {
+        let dylib = BinaryFile {
             executable_path: PathBuf::from("/Users/hariomnarang/miniconda3/bin/python"),
             cwd: PathBuf::from("."),
             path: PathBuf::from(

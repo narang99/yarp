@@ -1,4 +1,6 @@
 
+use std::path::PathBuf;
+
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
 /// an example json is in this test module, code is duplicated between `python/yarp` and our crate
 /// both should always be synced
@@ -11,49 +13,22 @@ pub struct YarpManifest {
     pub python: Python,
 }
 
-pub trait AssociatedFile {
-    fn get_path(&self) -> &str;
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
-    pub path: String,
+    pub path: PathBuf,
 }
 
-impl AssociatedFile for Load {
-    fn get_path(&self) -> &str {
-        &self.path
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Modules {
-    pub pure: Vec<Pure>,
     pub extensions: Vec<Extension>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Pure {
-    // pub name: String,
-    pub path: String,
-}
-
-impl AssociatedFile for Pure {
-    fn get_path(&self) -> &str {
-        &self.path
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Extension {
-    pub name: String,
-    pub path: String,
-}
-
-impl AssociatedFile for Extension {
-    fn get_path(&self) -> &str {
-        &self.path
-    }
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,12 +38,12 @@ pub struct Python {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Sys {
-    pub prefix: String,
-    pub exec_prefix: String,
-    pub platlibdir: String,
+    pub prefix: PathBuf,
+    pub exec_prefix: PathBuf,
+    pub platlibdir: PathBuf,
     pub version: Version,
-    pub path: Vec<String>,
-    pub executable: String,
+    pub path: Vec<PathBuf>,
+    pub executable: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -125,40 +100,32 @@ mod test {
 
         assert_eq!(manifest.loads.len(), 1);
         assert_eq!(
-            manifest.loads[0].path,
+            manifest.loads[0].path.to_str().unwrap(),
             "/users/hariomnarang/miniconda3/lib/libpango.so"
         );
 
-        assert_eq!(manifest.modules.pure.len(), 1);
-        // assert_eq!(manifest.modules.pure[0].name, "click");
-        assert_eq!(
-            manifest.modules.pure[0].path,
-            "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/click"
-        );
-
         assert_eq!(manifest.modules.extensions.len(), 1);
-        assert_eq!(manifest.modules.extensions[0].name, "fontTools.varLib.iup");
         assert_eq!(
-            manifest.modules.extensions[0].path,
+            manifest.modules.extensions[0].path.to_str().unwrap(),
             "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so"
         );
 
-        assert_eq!(manifest.python.sys.prefix, "/Users/hariomnarang/miniconda3");
+        assert_eq!(manifest.python.sys.prefix.to_str().unwrap(), "/Users/hariomnarang/miniconda3");
         assert_eq!(
-            manifest.python.sys.exec_prefix,
+            manifest.python.sys.exec_prefix.to_str().unwrap(),
             "/Users/hariomnarang/miniconda3"
         );
-        assert_eq!(manifest.python.sys.platlibdir, "lib");
+        assert_eq!(manifest.python.sys.platlibdir.to_str().unwrap(), "lib");
         assert_eq!(manifest.python.sys.version.major, 3);
         assert_eq!(manifest.python.sys.version.minor, 12);
         assert_eq!(manifest.python.sys.version.abi_thread, "");
         assert_eq!(manifest.python.sys.path.len(), 1);
         assert_eq!(
-            manifest.python.sys.path[0],
+            manifest.python.sys.path[0].to_str().unwrap(),
             "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages"
         );
         assert_eq!(
-            manifest.python.sys.executable,
+            manifest.python.sys.executable.to_str().unwrap(),
             "/Users/hariomnarang/miniconda3/bin/python"
         );
     }

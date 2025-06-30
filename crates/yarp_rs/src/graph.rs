@@ -97,7 +97,7 @@ impl FileGraph {
 
 #[cfg(test)]
 mod test {
-    use crate::node::{DistFile, Kind};
+    use crate::node::DistFile;
 
     use super::*;
     use anyhow::Result;
@@ -139,7 +139,7 @@ mod test {
     fn test_add_node_single() {
         let mut graph = FileGraph::new();
 
-        let node = Rc::new(Node { kind: Kind::Python });
+        let node = Rc::new(Node { path: PathBuf::from_str("/python").unwrap() });
 
         let dist_node = DistNode {
             node: Rc::clone(&node),
@@ -156,18 +156,14 @@ mod test {
     fn test_add_node_with_dependencies() {
         let mut graph = FileGraph::new();
 
-        let dep_node = Rc::new(Node {
-            kind: Kind::SharedLibrary {
-                lib_path: PathBuf::from_str("/libtest").unwrap(),
-            },
-        });
+        let dep_node = Rc::new(Node { path: PathBuf::from_str("/libtest").unwrap() });
 
         let dep_dist_node = DistNode {
             node: Rc::clone(&dep_node),
             dist_file: Rc::new(MockDistFile::new(vec![])),
         };
 
-        let main_node = Rc::new(Node { kind: Kind::Python });
+        let main_node = Rc::new(Node { path: PathBuf::from_str("/python").unwrap() });
 
         let main_dist_node = DistNode {
             node: Rc::clone(&main_node),
@@ -186,7 +182,7 @@ mod test {
     fn test_add_duplicate_node() {
         let mut graph = FileGraph::new();
 
-        let node = Rc::new(Node { kind: Kind::Python });
+        let node = Rc::new(Node { path: PathBuf::from_str("/python").unwrap() });
 
         let dist_node1 = DistNode {
             node: Rc::clone(&node),
@@ -213,9 +209,7 @@ mod test {
 
         // Create a chain: main -> dep1 -> dep2
         let dep2_node = Rc::new(Node {
-            kind: Kind::PyFile {
-                src_path: PathBuf::from_str("/path/to/dep2.py").unwrap(),
-            },
+            path: PathBuf::from_str("/path/to/dep2.py").unwrap(),
         });
 
         let dep2_dist_node = DistNode {
@@ -224,9 +218,7 @@ mod test {
         };
 
         let dep1_node = Rc::new(Node {
-            kind: Kind::SharedLibrary {
-                lib_path: PathBuf::from_str("libdep1").unwrap(),
-            },
+            path: PathBuf::from_str("libdep1").unwrap(),
         });
 
         let dep1_dist_node = DistNode {
@@ -235,9 +227,7 @@ mod test {
         };
 
         let dep3_node = Rc::new(Node {
-            kind: Kind::SharedLibrary {
-                lib_path: PathBuf::from_str("libdep3").unwrap(),
-            },
+            path: PathBuf::from_str("libdep3").unwrap(),
         });
 
         let dep3_dist_node = DistNode {
@@ -245,7 +235,7 @@ mod test {
             dist_file: Rc::new(MockDistFile::new(vec![dep2_dist_node])),
         };
 
-        let main_node = Rc::new(Node { kind: Kind::Python });
+        let main_node = Rc::new(Node { path: PathBuf::from_str("/python").unwrap() });
 
         let main_dist_node = DistNode {
             node: Rc::clone(&main_node),

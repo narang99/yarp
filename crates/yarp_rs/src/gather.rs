@@ -6,9 +6,9 @@ use anyhow::Result;
 use log::warn;
 
 use crate::{
-    ftypes::{Dylib, PyFileInSitePackages, PythonExe},
-    manifest::{AssociatedFile, YarpManifest},
-    node::{DistNode, Kind, Node},
+    ftypes::{BinaryFile, PlainFile},
+    manifest::YarpManifest,
+    node::{DistNode, Node},
 };
 
 type Done = HashSet<Rc<Node>>;
@@ -24,33 +24,49 @@ type Done = HashSet<Rc<Node>>;
  * We are also handling the python interpreter separately
  * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
  */
-fn get_all_mods(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
-    // we have a list of pure modules, which i honestly dont care about right now
-    // we have a list of site packages
-    // each node is actually simply recognised by the path, nothing else
-    // the data structures now are confusing, need to checkout how i can make this easier to work with
+fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
+    // given a manifest, we have exec_prefix, prefix and site-packages
+    // go through all recursively and get corresponding nodes for each
     unimplemented!()
 }
 
 fn gather_all_nodes(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
     let mut done: Done = HashSet::new();
     let exe = &manifest.python.sys.executable;
-    let loads = get_nodes(&manifest.loads, exe, cwd, &mut done)?;
-    let pures = get_nodes(&manifest.modules.pure, &exe, cwd, &mut done)?;
-    let exts = get_nodes(&manifest.modules.extensions, &exe, cwd, &mut done)?;
+    let loads = get_nodes(
+        &manifest
+            .loads
+            .iter()
+            .map(|load| load.path.clone())
+            .collect(),
+        exe,
+        cwd,
+        &mut done,
+    )?;
+    let exts = get_nodes(
+        &manifest
+            .modules
+            .extensions
+            .iter()
+            .map(|ext| ext.path.clone())
+            .collect(),
+        &exe,
+        cwd,
+        &mut done,
+    )?;
 
     Ok(())
 }
 
 fn get_nodes(
-    loads: &Vec<impl AssociatedFile>,
-    executable_path: &str,
+    paths: &Vec<PathBuf>,
+    executable_path: &PathBuf,
     cwd: &PathBuf,
     done: &mut Done,
 ) -> Result<Vec<DistNode>> {
     let mut res = Vec::new();
-    for load in loads {
-        let maybe_node = get_node_from_path(load.get_path(), executable_path, cwd);
+    for path in paths {
+        let maybe_node = get_node_from_path(path, executable_path, cwd);
         match maybe_node {
             None => {}
             Some(node_or_err) => match node_or_err {
@@ -65,12 +81,16 @@ fn get_nodes(
     Ok(res)
 }
 
-fn get_node_from_path(p: &str, executable_path: &str, cwd: &PathBuf) -> Option<Result<DistNode>> {
+fn get_node_from_path(
+    p: &PathBuf,
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+) -> Option<Result<DistNode>> {
     match path_type(p) {
-        PathType::PyFile => Some(mk_py_file_node(PathBuf::from(p))),
+        PathType::PyFile => Some(mk_py_file_node(p)),
         PathType::SharedLibrary => Some(mk_shared_lib_node(executable_path, &cwd, p)),
         PathType::Unknown => {
-            warn!("unknown file type in loads, ignoring, path={}", p);
+            warn!("unknown file type in loads, ignoring, path={}", p.display());
             None
         }
     }
@@ -82,7 +102,7 @@ enum PathType {
     Unknown,
 }
 
-fn path_type(p: &str) -> PathType {
+fn path_type(p: &PathBuf) -> PathType {
     if p.ends_with(".py") {
         PathType::PyFile
     } else if p.ends_with(".so") || p.ends_with(".dylib") {
@@ -92,11 +112,13 @@ fn path_type(p: &str) -> PathType {
     }
 }
 
-fn mk_py_exe_node(executable_path: &str, cwd: &PathBuf) -> Result<DistNode> {
-    let py_node = Rc::new(Node { kind: Kind::Python });
-    let path = PathBuf::from(executable_path);
-    let python_exe = PythonExe {
-        path,
+fn mk_py_exe_node(executable_path: &PathBuf, cwd: &PathBuf) -> Result<DistNode> {
+    let py_node = Rc::new(Node {
+        path: executable_path.clone(),
+    });
+    let python_exe = BinaryFile {
+        executable_path: executable_path.clone(),
+        path: executable_path.clone(),
         cwd: cwd.clone(),
     };
     Ok(DistNode {
@@ -105,16 +127,18 @@ fn mk_py_exe_node(executable_path: &str, cwd: &PathBuf) -> Result<DistNode> {
     })
 }
 
-fn mk_shared_lib_node(executable_path: &str, cwd: &PathBuf, lib_path: &str) -> Result<DistNode> {
-    let dylib = Dylib {
-        executable_path: PathBuf::from(executable_path),
+fn mk_shared_lib_node(
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+    lib_path: &PathBuf,
+) -> Result<DistNode> {
+    let dylib = BinaryFile {
+        executable_path: executable_path.clone(),
         cwd: cwd.clone(),
-        path: PathBuf::from(lib_path),
+        path: lib_path.clone(),
     };
     let lib_node = Rc::new(Node {
-        kind: Kind::SharedLibrary {
-            lib_path: dylib.path.clone(),
-        },
+        path: dylib.path.clone(),
     });
     Ok(DistNode {
         node: lib_node,
@@ -122,13 +146,9 @@ fn mk_shared_lib_node(executable_path: &str, cwd: &PathBuf, lib_path: &str) -> R
     })
 }
 
-fn mk_py_file_node(path: PathBuf) -> Result<DistNode> {
-    let py_file = PyFileInSitePackages { path: path.clone() };
-    let node = Rc::new(Node {
-        kind: Kind::PyFile {
-            src_path: path.clone(),
-        },
-    });
+fn mk_py_file_node(path: &PathBuf) -> Result<DistNode> {
+    let py_file = PlainFile { path: path.clone() };
+    let node = Rc::new(Node { path: path.clone() });
     Ok(DistNode {
         node,
         dist_file: Rc::new(py_file),

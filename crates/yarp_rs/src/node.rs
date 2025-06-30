@@ -5,12 +5,12 @@ use std::{fmt::Display, path::PathBuf, rc::Rc};
 /// `Python` kind denotes a python executable, only one of its kind can be present
 /// `SharedLibrary` kind denotes a shared library, equality checking is done using only name
 /// `PyFile` is unique for every `src_path`
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Kind {
-    Python,
-    SharedLibrary { lib_path: PathBuf },
-    PyFile { src_path: PathBuf },
-}
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub enum Kind {
+//     Python,
+//     SharedLibrary { lib_path: PathBuf },
+//     PyFile { src_path: PathBuf },
+// }
 
 /// every file that is tracked by yarp has to implement this trait
 /// it denotes a single file whose dependencies are moved into dist
@@ -47,19 +47,13 @@ pub trait DistFile: std::fmt::Debug {
 /// Whatever we need implement the box's trait
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Node {
-    pub kind: Kind,
+    pub path: PathBuf,
 }
 
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Node{{")?;
-        match &self.kind {
-            Kind::Python => write!(f, "Python"),
-            Kind::SharedLibrary { lib_path: name } => {
-                write!(f, "SharedLibrary({})", name.display())
-            }
-            Kind::PyFile { src_path } => write!(f, "PyFile({})", src_path.display()),
-        }?;
+        write!(f, "{}", self.path.display())?;
         write!(f, "}}")
     }
 }
