@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
 /// an example json is in this test module, code is duplicated between `python/yarp` and our crate

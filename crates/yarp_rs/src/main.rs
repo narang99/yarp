@@ -1,14 +1,7 @@
-use std::{env, fmt::format, path::PathBuf, rc::Rc};
+use std::env;
 
-use anyhow::{Result, anyhow};
-use log::{info, warn};
 
-use crate::{
-    ftypes::{Dylib, PyFileInSitePackages, PythonExe},
-    graph::FileGraph,
-    manifest::{Load, YarpManifest},
-    node::{DistNode, Kind, Node},
-};
+use crate::manifest::YarpManifest;
 
 pub mod ftypes;
 pub mod gather;

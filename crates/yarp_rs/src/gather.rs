@@ -1,13 +1,13 @@
 use core::unimplemented;
 // given a yarp manifest, gather all the nodes that we can discover
-use std::{collections::HashSet, hash::Hash, path::PathBuf, rc::Rc};
+use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
-use anyhow::{Result, anyhow};
-use log::{info, warn};
+use anyhow::Result;
+use log::warn;
 
 use crate::{
     ftypes::{Dylib, PyFileInSitePackages, PythonExe},
-    manifest::{AssociatedFile, Load, YarpManifest},
+    manifest::{AssociatedFile, YarpManifest},
     node::{DistNode, Kind, Node},
 };
 
