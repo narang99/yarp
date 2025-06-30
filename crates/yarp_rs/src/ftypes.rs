@@ -7,14 +7,29 @@ use crate::{
     node::{DistFile, DistNode, Kind, Node},
 };
 
+// this can be any resource file inside a site-packages
 #[derive(Debug)]
-pub struct PyFile {
+pub struct UnknownFileInSitePackages {
+    pub path: PathBuf,
+}
+impl DistFile for UnknownFileInSitePackages {
+    fn deps(&self) -> Result<Vec<DistNode>> {
+        Ok(Vec::new())
+    }
+
+    fn file_path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+#[derive(Debug)]
+pub struct PyFileInSitePackages {
     pub path: PathBuf,
 }
 
-impl DistFile for PyFile {
+impl DistFile for PyFileInSitePackages {
     fn deps(&self) -> Result<Vec<DistNode>> {
-        Ok(Vec::new()) 
+        Ok(Vec::new())
     }
 
     fn file_path(&self) -> &PathBuf {
@@ -108,11 +123,9 @@ fn get_deps_of_macho(
 }
 
 fn dist_node_from_dylib(dylib: Dylib) -> Result<DistNode> {
-    let file_name = Dylib::file_name_from_path(&dylib.path)?;
-
     let node = Node {
         kind: Kind::SharedLibrary {
-            name: file_name.to_string(),
+            lib_path: dylib.path.clone(),
         },
     };
     Ok(DistNode {

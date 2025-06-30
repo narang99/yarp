@@ -3,7 +3,7 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
-use std::{collections::HashMap, fmt::Display, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use lief::macho::{
@@ -134,9 +134,8 @@ fn get_load_commands(
                         );
                         continue;
                     }
-                    let p = resolve_load_cmd_path(&val, ctx).with_context(|| {
-                        format!("failed in resolving load command={}", val)
-                    })?;
+                    let p = resolve_load_cmd_path(&val, ctx)
+                        .with_context(|| format!("failed in resolving load command={}", val))?;
                     match p {
                         Some(p) => {
                             load_cmds.insert(val, p);

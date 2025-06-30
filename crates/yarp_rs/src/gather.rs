@@ -1,3 +1,4 @@
+use core::unimplemented;
 // given a yarp manifest, gather all the nodes that we can discover
 use std::{collections::HashSet, hash::Hash, path::PathBuf, rc::Rc};
 
@@ -5,29 +6,40 @@ use anyhow::{Result, anyhow};
 use log::{info, warn};
 
 use crate::{
-    ftypes::{Dylib, PyFile, PythonExe},
+    ftypes::{Dylib, PyFileInSitePackages, PythonExe},
     manifest::{AssociatedFile, Load, YarpManifest},
     node::{DistNode, Kind, Node},
 };
 
 type Done = HashSet<Rc<Node>>;
 
+/**
+ * Currently, we have nodes in a graph. Its an enum
+ * Each node is also hashable
+ * When we add a node, we also add its dependents
+ * The identity of a node is ALWAYS its absolute path (for all of them)
+ * For shared libraries, we have an edge case. Each node is symlinked to only one final node in the reals directory
+ * For these cases, its to_reals allows duplication, it would check for existence and only add it if its not present
+ * The current problem is that a node's absolute path is not the only used component for hashing everywhere
+ * We are also handling the python interpreter separately
+ * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
+ */
+fn get_all_mods(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
+    // we have a list of pure modules, which i honestly dont care about right now
+    // we have a list of site packages
+    // each node is actually simply recognised by the path, nothing else
+    // the data structures now are confusing, need to checkout how i can make this easier to work with
+    unimplemented!()
+}
+
 fn gather_all_nodes(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
     let mut done: Done = HashSet::new();
     let exe = &manifest.python.sys.executable;
-    let loads = get_nodes(
-        &manifest.loads,
-        exe,
-        cwd,
-        &mut done,
-    )?;
+    let loads = get_nodes(&manifest.loads, exe, cwd, &mut done)?;
     let pures = get_nodes(&manifest.modules.pure, &exe, cwd, &mut done)?;
     let exts = get_nodes(&manifest.modules.extensions, &exe, cwd, &mut done)?;
 
     Ok(())
-}
-
-fn gather_all_files_from_manifest(manifest: &YarpManifest) {
 }
 
 fn get_nodes(
@@ -38,24 +50,30 @@ fn get_nodes(
 ) -> Result<Vec<DistNode>> {
     let mut res = Vec::new();
     for load in loads {
-        let p = load.get_path();
-        match path_type(&p) {
-            PathType::PyFile => {
-                let node = mk_py_file_node(PathBuf::from(p))?;
-                done.insert(Rc::clone(&node.node));
-                res.push(node);
-            }
-            PathType::SharedLibrary => {
-                let node = mk_shared_lib_node(executable_path, &cwd, p)?;
-                done.insert(Rc::clone(&node.node));
-                res.push(node);
-            }
-            PathType::Unknown => {
-                warn!("unknown file type in loads, ignoring, path={}", p);
-            }
+        let maybe_node = get_node_from_path(load.get_path(), executable_path, cwd);
+        match maybe_node {
+            None => {}
+            Some(node_or_err) => match node_or_err {
+                Err(e) => return Err(e),
+                Ok(node) => {
+                    done.insert(Rc::clone(&node.node));
+                    res.push(node)
+                }
+            },
         };
     }
     Ok(res)
+}
+
+fn get_node_from_path(p: &str, executable_path: &str, cwd: &PathBuf) -> Option<Result<DistNode>> {
+    match path_type(p) {
+        PathType::PyFile => Some(mk_py_file_node(PathBuf::from(p))),
+        PathType::SharedLibrary => Some(mk_shared_lib_node(executable_path, &cwd, p)),
+        PathType::Unknown => {
+            warn!("unknown file type in loads, ignoring, path={}", p);
+            None
+        }
+    }
 }
 
 enum PathType {
@@ -95,7 +113,7 @@ fn mk_shared_lib_node(executable_path: &str, cwd: &PathBuf, lib_path: &str) -> R
     };
     let lib_node = Rc::new(Node {
         kind: Kind::SharedLibrary {
-            name: Dylib::file_name_from_path(&dylib.path)?,
+            lib_path: dylib.path.clone(),
         },
     });
     Ok(DistNode {
@@ -105,13 +123,10 @@ fn mk_shared_lib_node(executable_path: &str, cwd: &PathBuf, lib_path: &str) -> R
 }
 
 fn mk_py_file_node(path: PathBuf) -> Result<DistNode> {
-    let py_file = PyFile { path: path.clone() };
+    let py_file = PyFileInSitePackages { path: path.clone() };
     let node = Rc::new(Node {
         kind: Kind::PyFile {
-            src_path: path
-                .to_str()
-                .ok_or(anyhow!("path contains invalid UTF-8"))?
-                .to_string(),
+            src_path: path.clone(),
         },
     });
     Ok(DistNode {

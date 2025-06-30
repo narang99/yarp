@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
 /// an example json is in this test module, code is duplicated between `python/yarp` and our crate
-/// both should always be synced 
+/// both should always be synced
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -11,7 +11,6 @@ pub struct YarpManifest {
     pub modules: Modules,
     pub python: Python,
 }
-
 
 pub trait AssociatedFile {
     fn get_path(&self) -> &str;
@@ -36,7 +35,7 @@ pub struct Modules {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Pure {
-    pub name: String,
+    // pub name: String,
     pub path: String,
 }
 
@@ -132,7 +131,7 @@ mod test {
         );
 
         assert_eq!(manifest.modules.pure.len(), 1);
-        assert_eq!(manifest.modules.pure[0].name, "click");
+        // assert_eq!(manifest.modules.pure[0].name, "click");
         assert_eq!(
             manifest.modules.pure[0].path,
             "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/click"

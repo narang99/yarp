@@ -14,7 +14,7 @@ pub struct FileGraph {
 
 impl Display for FileGraph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            for node_idx in self.inner.node_indices() {
+        for node_idx in self.inner.node_indices() {
             let node = self
                 .idx_by_dist_node
                 .get(&node_idx)
@@ -72,7 +72,8 @@ impl FileGraph {
 
         for d in deps {
             let parent_node = Rc::clone(&d.node);
-            self.add_node(d).context(anyhow!("file: {}", our_path.to_string_lossy()))?;
+            self.add_node(d)
+                .context(anyhow!("file: {}", our_path.to_string_lossy()))?;
             self.add_edge(&parent_node, &our_node);
         }
 
@@ -100,17 +101,20 @@ mod test {
 
     use super::*;
     use anyhow::Result;
-    use std::path::PathBuf;
+    use std::{path::PathBuf, str::FromStr};
 
     #[derive(Debug)]
     struct MockDistFile {
         deps: Vec<DistNode>,
-        mock_path: PathBuf
+        mock_path: PathBuf,
     }
 
     impl MockDistFile {
         fn new(deps: Vec<DistNode>) -> Self {
-            Self { deps, mock_path: PathBuf::from("hello") }
+            Self {
+                deps,
+                mock_path: PathBuf::from("hello"),
+            }
         }
     }
 
@@ -118,7 +122,6 @@ mod test {
         fn deps(&self) -> Result<Vec<DistNode>> {
             Ok(self.deps.clone())
         }
-
 
         fn file_path(&self) -> &PathBuf {
             &self.mock_path
@@ -155,7 +158,7 @@ mod test {
 
         let dep_node = Rc::new(Node {
             kind: Kind::SharedLibrary {
-                name: "libtest".to_string(),
+                lib_path: PathBuf::from_str("/libtest").unwrap(),
             },
         });
 
@@ -211,7 +214,7 @@ mod test {
         // Create a chain: main -> dep1 -> dep2
         let dep2_node = Rc::new(Node {
             kind: Kind::PyFile {
-                src_path: "/path/to/dep2.py".to_string(),
+                src_path: PathBuf::from_str("/path/to/dep2.py").unwrap(),
             },
         });
 
@@ -222,7 +225,7 @@ mod test {
 
         let dep1_node = Rc::new(Node {
             kind: Kind::SharedLibrary {
-                name: "libdep1".to_string(),
+                lib_path: PathBuf::from_str("libdep1").unwrap(),
             },
         });
 
@@ -233,7 +236,7 @@ mod test {
 
         let dep3_node = Rc::new(Node {
             kind: Kind::SharedLibrary {
-                name: "libdep3".to_string(),
+                lib_path: PathBuf::from_str("libdep3").unwrap(),
             },
         });
 

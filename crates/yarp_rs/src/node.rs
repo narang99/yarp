@@ -1,5 +1,5 @@
-use std::{fmt::Display, path::PathBuf, rc::Rc};
 use anyhow::Result;
+use std::{fmt::Display, path::PathBuf, rc::Rc};
 
 /// `Kind` is used to differentiate between values which require separate handling
 /// `Python` kind denotes a python executable, only one of its kind can be present
@@ -8,8 +8,8 @@ use anyhow::Result;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Kind {
     Python,
-    SharedLibrary { name: String },
-    PyFile { src_path: String },
+    SharedLibrary { lib_path: PathBuf },
+    PyFile { src_path: PathBuf },
 }
 
 /// every file that is tracked by yarp has to implement this trait
@@ -20,7 +20,6 @@ pub trait DistFile: std::fmt::Debug {
     /// These would be used in creating the graph of files to be moved to dist
     /// dependencies are put into symlink farm basically
     fn deps(&self) -> Result<Vec<DistNode>>;
-
 
     /// return the path of the file
     fn file_path(&self) -> &PathBuf;
@@ -56,8 +55,10 @@ impl Display for Node {
         write!(f, "Node{{")?;
         match &self.kind {
             Kind::Python => write!(f, "Python"),
-            Kind::SharedLibrary { name } => write!(f, "SharedLibrary({})", name),
-            Kind::PyFile { src_path } => write!(f, "PyFile({})", src_path),
+            Kind::SharedLibrary { lib_path: name } => {
+                write!(f, "SharedLibrary({})", name.display())
+            }
+            Kind::PyFile { src_path } => write!(f, "PyFile({})", src_path.display()),
         }?;
         write!(f, "}}")
     }
