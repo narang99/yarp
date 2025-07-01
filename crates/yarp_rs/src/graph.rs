@@ -165,7 +165,7 @@ mod test {
             vec![PathBuf::from_str("/libtest").unwrap()],
         );
 
-        let idx = graph.add_tree(py_node.clone()).unwrap();
+        graph.add_tree(py_node.clone()).unwrap();
         assert_eq!(graph.inner.node_count(), 2);
         assert_eq!(graph.inner.edge_count(), 1);
         assert!(graph.idx_by_node.contains_right(&lib_test));
