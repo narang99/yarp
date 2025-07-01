@@ -3,7 +3,10 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
-use std::{collections::HashMap, path::{Component, Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    path::{Component, Path, PathBuf},
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use lief::macho::{
@@ -27,11 +30,13 @@ pub struct SharedLibCtx<'a> {
     cwd: &'a PathBuf,
 }
 
-
 pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
-    macho.load_cmds.iter().map(|(_, path)| path.clone()).collect()
+    macho
+        .load_cmds
+        .iter()
+        .map(|(_, path)| path.clone())
+        .collect()
 }
-
 
 /// parse a macho file and get its dependencies
 /// Parsing logic depends on three kinds of paths
@@ -133,15 +138,20 @@ fn get_load_commands(
                         );
                         continue;
                     }
-                    let p = resolve_load_cmd_path(&val, ctx)
-                        .with_context(|| format!("failed in resolving load command={} ctx={:?}", val, ctx))?;
+                    let p = resolve_load_cmd_path(&val, ctx).with_context(|| {
+                        format!("failed in resolving load command={} ctx={:?}", val, ctx)
+                    })?;
                     match p {
                         Some(p) => {
                             let p = normalize_path(&p);
                             load_cmds.insert(val, p);
                         }
                         None => {
-                            bail!("could not find dependency for load_cmd={} ctx={:?}", val, ctx);
+                            bail!(
+                                "could not find dependency for load_cmd={} ctx={:?}",
+                                val,
+                                ctx
+                            );
                         }
                     }
                 }
@@ -238,7 +248,6 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
     }
 }
 
-
 fn normalize_path(path: &Path) -> PathBuf {
     // copied from cargo
     // https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
@@ -268,4 +277,3 @@ fn normalize_path(path: &Path) -> PathBuf {
     }
     ret
 }
-
