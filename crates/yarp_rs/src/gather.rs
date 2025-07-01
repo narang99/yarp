@@ -1,12 +1,12 @@
 // use core::unimplemented;
 // // given a yarp manifest, gather all the nodes that we can discover
-use std::{collections::HashSet, path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 use anyhow::{Result, anyhow, bail};
-use log::{info, warn};
+use log::info;
 use pathdiff::diff_paths;
 use rand::{Rng, rng};
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use crate::{
     graph::FileGraph,

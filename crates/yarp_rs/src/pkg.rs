@@ -2,13 +2,11 @@
 
 use std::{fs, path::PathBuf};
 
-use anyhow::{anyhow, Context, Error, Result};
-use log::{error, warn};
+use anyhow::{anyhow, Context, Result};
 use pathdiff::diff_paths;
 
 use crate::{
-    graph::FileGraph,
-    node::{Node, Pkg, PkgSitePackages},
+    node::{Node, Pkg},
     pkg::export::{Export, mk_parent_dirs},
     pkg::paths::ExportedFileTree,
 };

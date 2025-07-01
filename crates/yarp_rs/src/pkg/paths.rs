@@ -5,11 +5,11 @@
 // where are the dependencies of the file relative to the file? for patching?
 // where is the destination?
 
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use log::error;
 
-use crate::{manifest::Sys, node::{Pkg, PkgSitePackages, PrefixPackages}};
+use crate::node::{Pkg, PkgSitePackages, PrefixPackages};
 
 pub trait ExportedFileTree {
     // returns the destination if there is an actual destination

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    manifest::{Sys, Version},
+    manifest::Version,
     node::deps::Deps,
 };
 

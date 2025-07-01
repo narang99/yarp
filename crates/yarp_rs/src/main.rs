@@ -1,7 +1,7 @@
-use std::{env, path::PathBuf};
+use std::env;
 
 
-use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, node::deps::Deps, pkg::move_to_dist};
+use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::move_to_dist};
 
 pub mod pkg;
 pub mod gather;
