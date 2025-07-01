@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 use crate::{
     graph::FileGraph,
     manifest::{Sys, Version, YarpManifest},
-    node::{Node, Pkg, PkgSitePackages, PrefixPackages},
+    node::{Node, Pkg, PkgSitePackages, PrefixPackages, deps::Deps},
     pkg::paths::is_shared_library,
 };
 
@@ -54,6 +54,8 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
     let mut nodes = Vec::new();
     let sys = &manifest.python.sys;
 
+    nodes.push(get_executable_node(&sys.executable, cwd)?);
+
     // the order of nodes collection is important
     // exec prefix and prefix can be inside site-packages
     // in this case, we want to put nodes with exec-prefix destination identity before site-pkgs identity
@@ -69,7 +71,13 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
         sys.exec_prefix.display(),
         lib_dynload_path.display()
     );
-    nodes.extend(get_nodes_recursive(&lib_dynload_path, &sys.version, get_exec_prefix_pkg)?);
+    nodes.extend(get_nodes_recursive(
+        &lib_dynload_path,
+        &sys.version,
+        &sys.executable,
+        cwd,
+        get_exec_prefix_pkg,
+    )?);
 
     // prefix now
     let stdlib_path = get_stdlib_loc(sys);
@@ -78,7 +86,13 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
         sys.prefix.display(),
         stdlib_path.display()
     );
-    nodes.extend(get_nodes_recursive(&stdlib_path, &sys.version, get_prefix_pkg)?);
+    nodes.extend(get_nodes_recursive(
+        &stdlib_path,
+        &sys.version,
+        &sys.executable,
+        cwd,
+        get_prefix_pkg,
+    )?);
 
     // do site-packages in the end
     let site_pkgs = get_site_pkgs_without_prefixes(&sys.path, &lib_dynload_path, &stdlib_path);
@@ -100,13 +114,30 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
             "gathering files from site-packages, site-package={}",
             site_pkg.display()
         );
-        nodes.extend(get_nodes_recursive(site_pkg, &sys.version, get_site_packages_pkg)?);
+        nodes.extend(get_nodes_recursive(
+            site_pkg,
+            &sys.version,
+            &sys.executable,
+            cwd,
+            get_site_packages_pkg,
+        )?);
     }
 
     Ok(nodes)
 }
 
-fn get_nodes_recursive<F>(directory: &PathBuf, version: &Version, callback: F) -> Result<Vec<Node>>
+fn get_executable_node(executable_path: &PathBuf, cwd: &PathBuf) -> Result<Node> {
+    let p = executable_path.clone();
+    Ok(Node::new(p, Pkg::Executable, Deps::new_binary(executable_path, executable_path, cwd)?))
+}
+
+fn get_nodes_recursive<F>(
+    directory: &PathBuf,
+    version: &Version,
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+    callback: F,
+) -> Result<Vec<Node>>
 where
     F: Fn(&PathBuf, &PathBuf, &str, &Version) -> Result<Pkg>,
 {
@@ -121,7 +152,8 @@ where
     let mut nodes = Vec::with_capacity(paths.len());
     for p in paths {
         let pkg = callback(&p, directory, &alias, version)?;
-        nodes.push(Node::new(p, pkg));
+        let deps = Deps::from_path(&p, executable_path, cwd)?;
+        nodes.push(Node::new(p, pkg, deps));
     }
     Ok(nodes)
 }
@@ -134,10 +166,17 @@ fn get_lib_dynload_loc(sys: &Sys) -> PathBuf {
 }
 
 fn get_stdlib_loc(sys: &Sys) -> PathBuf {
-    sys.prefix.join(&sys.platlibdir).join(sys.version.get_python_version())
+    sys.prefix
+        .join(&sys.platlibdir)
+        .join(sys.version.get_python_version())
 }
 
-fn get_exec_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, _alias: &str, version: &Version) -> Result<Pkg> {
+fn get_exec_prefix_pkg(
+    path: &PathBuf,
+    original_prefix: &PathBuf,
+    _alias: &str,
+    version: &Version,
+) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
         anyhow!(
             "failed in finding relative path of file inside prefix file={} prefix={}",

@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::node::{Node, Pkg};
+use crate::node::{deps::Deps, Node, Pkg};
 
 #[derive(Debug)]
 pub struct FileGraph {
@@ -83,11 +83,12 @@ impl FileGraph {
 
         let deps = node
             .deps
-            .find(&node.path, &self.executable_path, &self.cwd)?;
+            .find()?;
 
         for p in deps {
             let pkg = Pkg::from_path(&p);
-            let parent_node = Node::new(p.clone(), pkg);
+            let deps = Deps::from_path(&p, &self.executable_path, &self.cwd)?;
+            let parent_node = Node::new(p.clone(), pkg, deps);
             let parent_idx = self
                 .add_tree(parent_node)
                 .context(anyhow!("file: {}", p.display()))?;

@@ -12,6 +12,8 @@ use lief::macho::{
 };
 use log::info;
 
+use crate::node::deps::core::Macho;
+
 #[derive(Debug)]
 struct PathResolverCtx<'a> {
     rpaths: Vec<PathBuf>,
@@ -20,53 +22,27 @@ struct PathResolverCtx<'a> {
 }
 
 #[derive(Debug)]
-struct SharedLibCtx<'a> {
+pub struct SharedLibCtx<'a> {
     executable_path: &'a PathBuf,
     cwd: &'a PathBuf,
 }
 
-struct Macho {
-    // all load commands, along with the resolved path of the dependency
-    load_cmds: HashMap<String, PathBuf>,
 
-    // all rpaths, along with resolved rpath
-    rpaths: HashMap<String, PathBuf>,
-
-    // the current id of the dylib
-    id_dylib: Option<String>,
-
-    // path to the lib
-    path: PathBuf,
+pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
+    macho.load_cmds.iter().map(|(_, path)| path.clone()).collect()
 }
 
-pub fn get_deps(
-    macho_path: &PathBuf,
-    executable_path: &PathBuf,
-    cwd: &PathBuf,
-) -> Result<Vec<PathBuf>> {
-    let string_path = macho_path.to_str().ok_or(anyhow!(
-        "path {} could not be converted to string, `yarp` does not support these paths",
-        macho_path.display()
-    ))?;
-    let ctx = SharedLibCtx {
-        executable_path,
-        cwd,
-    };
-    let macho = parse(&string_path, &ctx)?;
-    Ok(macho.load_cmds.into_iter().map(|(_, path)| path).collect())
-}
-
-
-// fn canonicalize_load_cmd_path(path) {
-
-// }
 
 /// parse a macho file and get its dependencies
 /// Parsing logic depends on three kinds of paths
 /// First is an actual path, denoted by Path/PathBuf
 /// Second is a string path that needs resolution
-fn parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
-    _parse(macho_path, ctx)
+pub fn parse(macho_path: &str, executable_path: &PathBuf, cwd: &PathBuf) -> Result<Macho> {
+    let ctx = SharedLibCtx {
+        executable_path,
+        cwd,
+    };
+    _parse(macho_path, &ctx)
         .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path, ctx))
 }
 

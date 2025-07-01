@@ -97,8 +97,7 @@ impl Display for Node {
 }
 
 impl Node {
-    pub fn new(path: PathBuf, pkg: Pkg) -> Node {
-        let deps = Deps::from_path(&path);
+    pub fn new(path: PathBuf, pkg: Pkg, deps: Deps) -> Node {
         Node { path, deps, pkg }
     }
 
