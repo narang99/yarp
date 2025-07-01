@@ -1,165 +1,268 @@
 // use core::unimplemented;
 // // given a yarp manifest, gather all the nodes that we can discover
-// use std::{collections::HashSet, path::PathBuf, rc::Rc};
+use std::{collections::HashSet, path::PathBuf, rc::Rc};
 
-// use anyhow::Result;
-// use log::warn;
-// use walkdir::{DirEntry, WalkDir};
+use anyhow::{Result, anyhow, bail};
+use log::{info, warn};
+use pathdiff::diff_paths;
+use rand::{Rng, rng};
+use walkdir::{DirEntry, WalkDir};
 
-// use crate::{
-//     ftypes::{BinaryFile, PlainFile},
-//     manifest::YarpManifest,
-//     node::{Node, GraphNode},
-// };
+use crate::{
+    graph::FileGraph,
+    manifest::{Sys, Version, YarpManifest},
+    node::{Node, Pkg, PkgSitePackages, PrefixPackages},
+    pkg::paths::is_shared_library,
+};
 
-// type Done = HashSet<Rc<GraphNode>>;
+pub fn build_graph_from_manifest(manifest: &YarpManifest, cwd: &PathBuf) -> Result<FileGraph> {
+    let nodes = get_python_universe(manifest, cwd)?;
+    build_graph(nodes, manifest.python.sys.executable.clone(), cwd.clone())
+}
 
-// /**
-//  * Currently, we have nodes in a graph. Its an enum
-//  * Each node is also hashable
-//  * When we add a node, we also add its dependents
-//  * The identity of a node is ALWAYS its absolute path (for all of them)
-//  * For shared libraries, we have an edge case. Each node is symlinked to only one final node in the reals directory
-//  * For these cases, its to_reals allows duplication, it would check for existence and only add it if its not present
-//  * The current problem is that a node's absolute path is not the only used component for hashing everywhere
-//  * We are also handling the python interpreter separately
-//  * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
-//  */
-// pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
-//     // given a manifest, we have exec_prefix, prefix and site-packages
-//     // go through all recursively and get corresponding nodes for each
-//     let mut nodes = Vec::new();
-//     let sys = &manifest.python.sys;
-//     let exec_path = &manifest.python.sys.executable;
+fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Result<FileGraph> {
+    info!(
+        "building graph, number of nodes={} executable_path={} cwd={}",
+        nodes.len(),
+        executable_path.display(),
+        cwd.display()
+    );
+    let mut g = FileGraph::new(executable_path, cwd);
+    for node in &nodes {
+        g.add_node(node.clone());
+    }
+    for node in nodes {
+        g.add_tree(node)?;
+    }
+    Ok(g)
+}
 
-//     for site_pkg in &sys.path {
-//         let paths = get_paths_recursive_from_dir(&site_pkg)?;
-//         nodes.extend(get_nodes(&paths, exec_path, cwd));
-//     }
+/**
+ * Currently, we have nodes in a graph. Its an enum
+ * Each node is also hashable
+ * When we add a node, we also add its dependents
+ * The identity of a node is ALWAYS its absolute path (for all of them)
+ * For shared libraries, we have an edge case. Each node is symlinked to only one final node in the reals directory
+ * For these cases, its to_reals allows duplication, it would check for existence and only add it if its not present
+ * The current problem is that a node's absolute path is not the only used component for hashing everywhere
+ * We are also handling the python interpreter separately
+ * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
+ */
+pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec<Node>> {
+    // given a manifest, we have exec_prefix, prefix and site-packages
+    // go through all recursively and get corresponding nodes for each
+    let mut nodes = Vec::new();
+    let sys = &manifest.python.sys;
 
-//     Ok(())
-// }
+    // the order of nodes collection is important
+    // exec prefix and prefix can be inside site-packages
+    // in this case, we want to put nodes with exec-prefix destination identity before site-pkgs identity
+    // graph only cares about the path of the node
+    // any duplicate paths in site-packages which repeat from prefix would be ignored
+    // i might need to revert this decision
+    // and use some other sort of variable for node hashing other than path too (some enum maybe?)
 
+    // exec_prefix can be inside prefix, do that first
+    let lib_dynload_path = get_lib_dynload_loc(sys);
+    info!(
+        "gathering files from exec_prefix, exec_prefix={}, lib-dynload={}",
+        sys.exec_prefix.display(),
+        lib_dynload_path.display()
+    );
+    nodes.extend(get_nodes_recursive(&lib_dynload_path, &sys.version, get_exec_prefix_pkg)?);
 
-// fn get_paths_recursive_from_dir(base_path: &PathBuf) -> Result<Vec<PathBuf>> {
-//     let mut paths = Vec::new();
-//     for maybe_d in WalkDir::new(base_path) {
-//         match maybe_d {
-//             Ok(d) => {
-//                 paths.push(d.path().to_path_buf());
-//             }
-//             Err(e) => {
-//                 return Err(e)?;
-//             }
-//         }
-//     }
-//     Ok(paths)
-// }
+    // prefix now
+    let stdlib_path = get_stdlib_loc(sys);
+    info!(
+        "gathering files from stdlib, prefix={} stdlib={}",
+        sys.prefix.display(),
+        stdlib_path.display()
+    );
+    nodes.extend(get_nodes_recursive(&stdlib_path, &sys.version, get_prefix_pkg)?);
 
-// // fn gather_all_nodes(manifest: &YarpManifest, cwd: &PathBuf) -> Result<()> {
-// //     let mut done: Done = HashSet::new();
-// //     let exe = &manifest.python.sys.executable;
-// //     let loads = get_nodes(
-// //         &manifest
-// //             .loads
-// //             .iter()
-// //             .map(|load| load.path.clone())
-// //             .collect(),
-// //         exe,
-// //         cwd,
-// //         &mut done,
-// //     )?;
-// //     let exts = get_nodes(
-// //         &manifest
-// //             .modules
-// //             .extensions
-// //             .iter()
-// //             .map(|ext| ext.path.clone())
-// //             .collect(),
-// //         &exe,
-// //         cwd,
-// //         &mut done,
-// //     )?;
+    // do site-packages in the end
+    let site_pkgs = get_site_pkgs_without_prefixes(&sys.path, &lib_dynload_path, &stdlib_path);
+    let site_pkgs = only_top_level_site_pkgs(&site_pkgs);
+    info!(
+        "gathering files from site-packages: {:?} original={:?}",
+        site_pkgs, sys.path
+    );
+    for site_pkg in &site_pkgs {
+        if !site_pkg.exists() {
+            // its valid for a pythonpath to not exist
+            info!(
+                "site-packages {} does not exist, ignoring",
+                site_pkg.display()
+            );
+            continue;
+        }
+        info!(
+            "gathering files from site-packages, site-package={}",
+            site_pkg.display()
+        );
+        nodes.extend(get_nodes_recursive(site_pkg, &sys.version, get_site_packages_pkg)?);
+    }
 
-// //     Ok(())
-// // }
+    Ok(nodes)
+}
 
-// fn get_nodes(
-//     paths: &Vec<PathBuf>,
-//     executable_path: &PathBuf,
-//     cwd: &PathBuf,
-// ) -> Result<Vec<Node>> {
-//     let mut res = Vec::new();
-//     for path in paths {
-//         let maybe_node = get_node_from_path(path, executable_path, cwd);
-//         match maybe_node {
-//             None => {}
-//             Some(node_or_err) => match node_or_err {
-//                 Err(e) => return Err(e),
-//                 Ok(node) => {
-//                     res.push(node)
-//                 }
-//             },
-//         };
-//     }
-//     Ok(res)
-// }
+fn get_nodes_recursive<F>(directory: &PathBuf, version: &Version, callback: F) -> Result<Vec<Node>>
+where
+    F: Fn(&PathBuf, &PathBuf, &str, &Version) -> Result<Pkg>,
+{
+    if !directory.exists() {
+        bail!(
+            "fatal: tried finding nodes recursively for directory={}, but it does not exist",
+            directory.display()
+        );
+    }
+    let paths = get_paths_recursive_from_dir(directory)?;
+    let alias = random_string();
+    let mut nodes = Vec::with_capacity(paths.len());
+    for p in paths {
+        let pkg = callback(&p, directory, &alias, version)?;
+        nodes.push(Node::new(p, pkg));
+    }
+    Ok(nodes)
+}
 
-// fn get_node_from_path(
-//     p: &PathBuf,
-//     executable_path: &PathBuf,
-//     cwd: &PathBuf,
-// ) -> Option<Result<Node>> {
-//     match path_type(p) {
-//         PathType::PyFile => Some(mk_py_file_node(p)),
-//         PathType::SharedLibrary => Some(mk_shared_lib_node(executable_path, &cwd, p)),
-//         PathType::Unknown => {
-//             warn!("unknown file type in loads, ignoring, path={}", p.display());
-//             None
-//         }
-//     }
-// }
+fn get_lib_dynload_loc(sys: &Sys) -> PathBuf {
+    sys.exec_prefix
+        .join(&sys.platlibdir)
+        .join(sys.version.get_python_version())
+        .join("lib-dynload")
+}
 
-// enum PathType {
-//     PyFile,
-//     SharedLibrary,
-//     Unknown,
-// }
+fn get_stdlib_loc(sys: &Sys) -> PathBuf {
+    sys.prefix.join(&sys.platlibdir).join(sys.version.get_python_version())
+}
 
-// fn path_type(p: &PathBuf) -> PathType {
-//     if p.ends_with(".py") {
-//         PathType::PyFile
-//     } else if p.ends_with(".so") || p.ends_with(".dylib") {
-//         PathType::SharedLibrary
-//     } else {
-//         PathType::Unknown
-//     }
-// }
+fn get_exec_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, _alias: &str, version: &Version) -> Result<Pkg> {
+    let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
+        anyhow!(
+            "failed in finding relative path of file inside prefix file={} prefix={}",
+            path.display(),
+            original_prefix.display()
+        )
+    })?;
+    let prefix_pkg = PrefixPackages {
+        original_prefix: original_prefix.clone(),
+        version: version.clone(),
+        rel_path,
+    };
+    if is_shared_library(path) {
+        Ok(Pkg::ExecPrefixBinary(prefix_pkg))
+    } else {
+        Ok(Pkg::ExecPrefixPlain(prefix_pkg))
+    }
+}
 
-// fn mk_shared_lib_node(
-//     executable_path: &PathBuf,
-//     cwd: &PathBuf,
-//     lib_path: &PathBuf,
-// ) -> Result<Node> {
-//     let dylib = BinaryFile {
-//         executable_path: executable_path.clone(),
-//         cwd: cwd.clone(),
-//         path: lib_path.clone(),
-//     };
-//     let lib_node = Rc::new(GraphNode {
-//         path: dylib.path.clone(),
-//     });
-//     Ok(Node {
-//         node: lib_node,
-//         deps: Rc::new(dylib),
-//     })
-// }
+fn get_prefix_pkg(
+    path: &PathBuf,
+    original_prefix: &PathBuf,
+    _alias: &str,
+    version: &Version,
+) -> Result<Pkg> {
+    let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
+        anyhow!(
+            "failed in finding relative path of file inside prefix file={} prefix={}",
+            path.display(),
+            original_prefix.display()
+        )
+    })?;
+    let prefix_pkg = PrefixPackages {
+        original_prefix: original_prefix.clone(),
+        version: version.clone(),
+        rel_path,
+    };
+    if is_shared_library(path) {
+        Ok(Pkg::PrefixBinary(prefix_pkg))
+    } else {
+        Ok(Pkg::PrefixPlain(prefix_pkg))
+    }
+}
 
-// fn mk_py_file_node(path: &PathBuf) -> Result<Node> {
-//     let py_file = PlainFile { path: path.clone() };
-//     let node = Rc::new(GraphNode { path: path.clone() });
-//     Ok(Node {
-//         node,
-//         deps: Rc::new(py_file),
-//     })
-// }
+fn get_site_pkgs_without_prefixes(
+    site_pkgs: &Vec<PathBuf>,
+    lib_dynload: &PathBuf,
+    stdlib: &PathBuf,
+) -> Vec<PathBuf> {
+    site_pkgs
+        .iter()
+        .filter(|p| **p != *lib_dynload)
+        .filter(|p| **p != *stdlib)
+        .map(|p| p.clone())
+        .collect()
+}
+
+fn only_top_level_site_pkgs(sys_path: &Vec<PathBuf>) -> Vec<PathBuf> {
+    sys_path
+        .iter()
+        .filter(|p| !is_sub_path_of_other_pkgs(p, &sys_path))
+        .map(|p| p.clone())
+        .collect()
+}
+
+fn is_sub_path_of_other_pkgs(p: &PathBuf, sys_path: &Vec<PathBuf>) -> bool {
+    for other in sys_path {
+        if p != other && p.starts_with(other) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn get_site_packages_pkg(
+    path: &PathBuf,
+    site_pkg_path: &PathBuf,
+    alias: &str,
+    _version: &Version,
+) -> Result<Pkg> {
+    let rel_path = diff_paths(&path, &site_pkg_path).ok_or_else(|| {
+        anyhow!(
+            "failed in finding relative path of file inside site-packages, file={} site-packages={}",
+            path.display(),
+            site_pkg_path.display()
+        )
+    })?;
+    let res = PkgSitePackages {
+        site_packages: site_pkg_path.clone(),
+        alias: alias.to_string(),
+        rel_path: rel_path,
+    };
+    if is_shared_library(path) {
+        Ok(Pkg::SitePackagesBinary(res))
+    } else {
+        Ok(Pkg::SitePackagesPlain(res))
+    }
+}
+
+fn random_string() -> String {
+    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+    let mut rng = rng();
+
+    (0..10)
+        .map(|_| {
+            let idx = rng.random_range(0..CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect()
+}
+
+fn get_paths_recursive_from_dir(base_path: &PathBuf) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    for maybe_d in WalkDir::new(base_path).into_iter() {
+        match maybe_d {
+            Ok(d) => {
+                let p = d.into_path();
+                if p.is_file() {
+                    paths.push(p);
+                }
+            }
+            Err(e) => {
+                return Err(e)?;
+            }
+        }
+    }
+    Ok(paths)
+}

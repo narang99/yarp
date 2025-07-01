@@ -3,7 +3,7 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::{Component, Path, PathBuf}};
 
 use anyhow::{Context, Result, anyhow, bail};
 use lief::macho::{
@@ -12,6 +12,7 @@ use lief::macho::{
 };
 use log::info;
 
+#[derive(Debug)]
 struct PathResolverCtx<'a> {
     rpaths: Vec<PathBuf>,
     loader_path: &'a PathBuf,
@@ -54,6 +55,11 @@ pub fn get_deps(
     let macho = parse(&string_path, &ctx)?;
     Ok(macho.load_cmds.into_iter().map(|(_, path)| path).collect())
 }
+
+
+// fn canonicalize_load_cmd_path(path) {
+
+// }
 
 /// parse a macho file and get its dependencies
 /// Parsing logic depends on three kinds of paths
@@ -152,13 +158,14 @@ fn get_load_commands(
                         continue;
                     }
                     let p = resolve_load_cmd_path(&val, ctx)
-                        .with_context(|| format!("failed in resolving load command={}", val))?;
+                        .with_context(|| format!("failed in resolving load command={} ctx={:?}", val, ctx))?;
                     match p {
                         Some(p) => {
+                            let p = normalize_path(&p);
                             load_cmds.insert(val, p);
                         }
                         None => {
-                            bail!("could not find dependency for load_cmd={}", val);
+                            bail!("could not find dependency for load_cmd={} ctx={:?}", val, ctx);
                         }
                     }
                 }
@@ -254,3 +261,35 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
         }
     }
 }
+
+
+fn normalize_path(path: &Path) -> PathBuf {
+    // copied from cargo
+    // https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
+    // basically `canonicalize`, but does not require the path to exist
+    let mut components = path.components().peekable();
+    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
+        components.next();
+        PathBuf::from(c.as_os_str())
+    } else {
+        PathBuf::new()
+    };
+
+    for component in components {
+        match component {
+            Component::Prefix(..) => unreachable!(),
+            Component::RootDir => {
+                ret.push(component.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                ret.pop();
+            }
+            Component::Normal(c) => {
+                ret.push(c);
+            }
+        }
+    }
+    ret
+}
+

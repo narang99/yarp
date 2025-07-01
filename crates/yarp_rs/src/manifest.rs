@@ -1,4 +1,3 @@
-
 use std::path::PathBuf;
 
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
@@ -13,18 +12,15 @@ pub struct YarpManifest {
     pub python: Python,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
     pub path: PathBuf,
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Modules {
     pub extensions: Vec<Extension>,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Extension {
@@ -46,11 +42,17 @@ pub struct Sys {
     pub executable: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Version {
     pub major: u32,
     pub minor: u32,
     pub abi_thread: String,
+}
+
+impl Version {
+    pub fn get_python_version(&self) -> String {
+        format!("python{}.{}{}", self.major, self.minor, self.abi_thread)
+    }
 }
 
 #[cfg(test)]
@@ -110,7 +112,10 @@ mod test {
             "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so"
         );
 
-        assert_eq!(manifest.python.sys.prefix.to_str().unwrap(), "/Users/hariomnarang/miniconda3");
+        assert_eq!(
+            manifest.python.sys.prefix.to_str().unwrap(),
+            "/Users/hariomnarang/miniconda3"
+        );
         assert_eq!(
             manifest.python.sys.exec_prefix.to_str().unwrap(),
             "/Users/hariomnarang/miniconda3"

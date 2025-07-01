@@ -32,10 +32,16 @@ impl Deps {
     }
 
     pub fn from_path(path: &PathBuf) -> Deps {
-        if path.ends_with(".so") || path.ends_with(".dylib") {
-            Deps::Binary
-        } else {
-            Deps::Plain
+        let ext = path.extension();
+        match ext {
+            None => Deps::Plain,
+            Some(ext) => {
+                if ext == "so" || ext == "dylib" {
+                    Deps::Binary
+                } else {
+                    Deps::Plain
+                }
+            }
         }
     }
 

@@ -2,9 +2,9 @@ use std::{fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
-use petgraph::{Graph, algo::toposort, graph::NodeIndex};
+use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::node::Node;
+use crate::node::{Node, Pkg};
 
 #[derive(Debug)]
 pub struct FileGraph {
@@ -84,10 +84,10 @@ impl FileGraph {
         let deps = node
             .deps
             .find(&node.path, &self.executable_path, &self.cwd)?;
-        println!("adding deps for {:?}, deps={:?}", node, deps);
 
         for p in deps {
-            let parent_node = Node::new(p.clone());
+            let pkg = Pkg::from_path(&p);
+            let parent_node = Node::new(p.clone(), pkg);
             let parent_idx = self
                 .add_tree(parent_node)
                 .context(anyhow!("file: {}", p.display()))?;
@@ -110,13 +110,33 @@ impl FileGraph {
                 .clone()
         }))
     }
+
+    pub fn get_node_dependencies(&self, node: &Node) -> Vec<Node> {
+        // given a node, return all the dependencies of the node
+        self.idx_by_node
+            .get_by_right(node)
+            .map(|idx| {
+                self.inner
+                    .edges_directed(*idx, Incoming)
+                    .map(|e| self.get_node_by_index_or_panic(e.source()))
+                    .collect::<Vec<Node>>()
+            })
+            .unwrap_or(vec![])
+    }
+
+    fn get_node_by_index_or_panic(&self, idx: NodeIndex) -> Node {
+        self.idx_by_node.get_by_left(&idx).expect(
+            &format!("corrupted graph state: could not find node for idx in edge, idx={:?}", idx)
+        ).clone()
+    }
 }
+
 
 #[cfg(test)]
 mod test {
 
     use super::*;
-    
+
     use std::{path::PathBuf, str::FromStr};
 
     fn get_graph() -> FileGraph {

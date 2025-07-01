@@ -4,15 +4,74 @@ use std::{
     path::PathBuf,
 };
 
-use crate::node::deps::Deps;
+use crate::{
+    manifest::{Sys, Version},
+    node::deps::Deps,
+};
 
 pub mod deps;
+
+#[derive(Debug, Clone)]
+pub struct PkgSitePackages {
+    // original site-packages path
+    pub site_packages: PathBuf,
+    // to prevent collisions, we create an alias which is the name of this site-packages destination in dist
+    pub alias: String,
+    // the path relative to site-packages path, we simply copy data from node to this path inside alias in dist
+    pub rel_path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct PrefixPackages {
+    pub original_prefix: PathBuf,
+
+    pub rel_path: PathBuf,
+
+    pub version: Version,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pkg {
+    SitePackagesPlain(PkgSitePackages),
+    SitePackagesBinary(PkgSitePackages),
+
+    ExecPrefixPlain(PrefixPackages),
+    ExecPrefixBinary(PrefixPackages),
+    PrefixPlain(PrefixPackages),
+    PrefixBinary(PrefixPackages),
+
+    Executable,
+    Binary,
+    Plain,
+}
+
+impl Pkg {
+    pub fn from_path(path: &PathBuf) -> Pkg {
+        // uses simple heuristics to find the packager for a path
+        // it would be either of binary or plain, as we don't have context of any site-packages
+        // it is preferred to pass the correct Pkg manually (you might have your own heuristics)
+        // create enum variant yourself and return it
+        let ext = path.extension();
+        match ext {
+            None => Pkg::Plain,
+            Some(ext) => {
+                if ext == "so" || ext == "dylib" {
+                    Pkg::Binary
+                } else {
+                    Pkg::Plain
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Node {
     pub path: PathBuf,
 
     pub deps: Deps,
+
+    pub pkg: Pkg,
 }
 
 impl PartialEq for Node {
@@ -38,13 +97,17 @@ impl Display for Node {
 }
 
 impl Node {
-    pub fn new(path: PathBuf) -> Node {
+    pub fn new(path: PathBuf, pkg: Pkg) -> Node {
         let deps = Deps::from_path(&path);
-        Node { path, deps }
+        Node { path, deps, pkg }
     }
 
     #[cfg(test)]
     pub fn mock(path: PathBuf, deps: Vec<PathBuf>) -> Node {
-        Node {path, deps: Deps::mock(deps)}
+        Node {
+            path,
+            deps: Deps::mock(deps),
+            pkg: Pkg::Binary,
+        }
     }
 }

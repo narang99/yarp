@@ -1,9 +1,9 @@
-use std::env;
+use std::{env, path::PathBuf};
 
 
-use crate::manifest::YarpManifest;
+use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, node::deps::Deps, pkg::move_to_dist};
 
-pub mod ftypes;
+pub mod pkg;
 pub mod gather;
 pub mod graph;
 pub mod manifest;
@@ -60,4 +60,10 @@ fn main() {
     let manifest: YarpManifest =
         serde_json::from_str(&manifest_contents).expect("Failed to parse yarp manifest as JSON");
     let cwd = env::current_dir().unwrap();
+    let graph = build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
+    let dist = cwd.join("dist");
+    for node in graph.toposort().unwrap() {
+        let deps = graph.get_node_dependencies(&node);
+        move_to_dist(&node, &deps, &dist).unwrap();
+    }
 }
