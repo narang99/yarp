@@ -5,6 +5,7 @@
 
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     path::{Component, Path, PathBuf},
     str::FromStr,
 };
@@ -207,7 +208,7 @@ fn get_load_commands(
                         continue;
                     }
                     let p =
-                        resolve_load_cmd_path_with_dyld_fallback(&val, ctx).with_context(|| {
+                        resolve_load_cmd_path_with_dyld_fallback(&val, ctx, known_libs).with_context(|| {
                             format!("failed in resolving load command={} ctx={:?}", val, ctx)
                         })?;
                     match p {
@@ -270,34 +271,49 @@ fn resolve_rpath(
 fn resolve_load_cmd_path_with_dyld_fallback(
     load_cmd_path: &str,
     ctx: &PathResolverCtx,
+    known_libs: &HashMap<String, PathBuf>
 ) -> Result<Option<PathBuf>> {
     let resolved = resolve_load_cmd_path(load_cmd_path, ctx)?;
     match resolved {
         Some(resolved) => Ok(Some(resolved)),
         None => {
-            let resolved = find_in_dirs(load_cmd_path, &ctx.shared_lib_ctx.dyld_library_path)?;
-            Ok(resolved)
+            let p = PathBuf::from_str(load_cmd_path).context(format!(
+                "failure in converting load_cmd to PathBuf, cmd={}",
+                load_cmd_path
+            ))?;
+            match p.file_name() {
+                None => Ok(None),
+                Some(file_name) => {
+                    let resolved = find_in_dirs(file_name, &ctx.shared_lib_ctx.dyld_library_path)?;
+                    match resolved {
+                        Some(resolved) => Ok(Some(resolved)),
+                        None => {
+                            let file_name = file_name.to_str().with_context(|| {
+                                anyhow!(
+                                    "failed in converting file_name to str, file_name={}",
+                                    file_name.display()
+                                )
+                            })?;
+                            match known_libs.get(file_name) {
+                                Some(lib_path) => Ok(Some(lib_path.clone())),
+                                None => Ok(None),
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-fn find_in_dirs(load_cmd_path: &str, dirs: &Vec<PathBuf>) -> Result<Option<PathBuf>> {
-    let p = PathBuf::from_str(load_cmd_path).context(format!(
-        "failure in converting load_cmd to PathBuf, cmd={}",
-        load_cmd_path
-    ))?;
-    match p.file_name() {
-        None => Ok(None),
-        Some(file_name) => {
-            for dir in dirs {
-                let candidate = dir.join(file_name);
-                if candidate.exists() {
-                    return Ok(Some(candidate.clone()));
-                }
-            }
-            Ok(None)
+fn find_in_dirs(file_name: &OsStr, dirs: &Vec<PathBuf>) -> Result<Option<PathBuf>> {
+    for dir in dirs {
+        let candidate = dir.join(file_name);
+        if candidate.exists() {
+            return Ok(Some(candidate.clone()));
         }
     }
+    Ok(None)
 }
 
 /// given a load command, this function would try to resolve it

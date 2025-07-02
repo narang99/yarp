@@ -2,9 +2,8 @@
 // // given a yarp manifest, gather all the nodes that we can discover
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Result, anyhow, bail};
-use log::info;
-use pathdiff::diff_paths;
+use anyhow::{Context, Result, anyhow, bail};
+use log::{info, warn};
 use rand::{Rng, rng};
 use walkdir::WalkDir;
 
@@ -14,25 +13,25 @@ pub use site_pkgs_comp::PythonPathComponent;
 
 use crate::{
     gather::{
-        node_factory::{CreateNode, generate_node},
+        node_factory::{generate_node, CreateNode},
         site_pkgs_comp::get_python_path_mapping,
     },
     graph::FileGraph,
-    manifest::{Env, Python, Sys, Version, YarpManifest},
-    node::{Node, Pkg, PkgSitePackages, PrefixPackages, deps::Deps},
-    pkg::paths::is_shared_library,
+    manifest::{Env, Sys, Version, YarpManifest},
+    node::{deps::Deps, Node},
 };
 
 pub fn build_graph_from_manifest(
     manifest: &Box<YarpManifest>,
     cwd: &PathBuf,
 ) -> Result<(FileGraph, Vec<PythonPathComponent>)> {
-    let (nodes, path_components) = get_python_universe(manifest, cwd)?;
+    let (nodes, path_components, mut known_libs) = get_python_universe(manifest, cwd)?;
     let g = build_graph(
         nodes,
         manifest.python.sys.executable.clone(),
         cwd.clone(),
         manifest.env.clone(),
+        &mut known_libs,
     )?;
     Ok((g, path_components))
 }
@@ -42,6 +41,7 @@ fn build_graph(
     executable_path: PathBuf,
     cwd: PathBuf,
     env: Env,
+    known_libs: &mut HashMap<String, PathBuf>,
 ) -> Result<FileGraph> {
     info!(
         "building graph, number of nodes={} executable_path={} cwd={}",
@@ -50,12 +50,31 @@ fn build_graph(
         cwd.display()
     );
     let mut g = FileGraph::new(executable_path, cwd, env);
+    info!("Build graph: pass 1, begin");
+    let mut failures = Vec::new();
     for node in &nodes {
         g.add_node(node.clone());
     }
     for node in nodes {
-        g.add_tree(node)?;
+        match g.add_tree(node.clone(), &known_libs) {
+            Ok(_) => {}
+            Err(_) => {
+                failures.push(node);
+            }
+        }
     }
+    info!(
+        "Build graph: pass 2, begin, number of nodes that failed to add: {}",
+        failures.len()
+    );
+    for node in g.iter_nodes() {
+        let (file_name, path) = get_lib_from_node(node)?;
+        known_libs.insert(file_name, path);
+    }
+    for node in failures {
+        g.add_tree(node, &known_libs)?;
+    }
+
     info!(
         "graph built successfully, nodes inserted in graph={}",
         g.len()
@@ -77,22 +96,89 @@ fn build_graph(
 pub fn get_python_universe(
     manifest: &YarpManifest,
     cwd: &PathBuf,
-    // known_libs: &HashMap<String, PathBuf>,
-) -> Result<(Vec<Node>, Vec<PythonPathComponent>)> {
+) -> Result<(
+    Vec<Node>,
+    Vec<PythonPathComponent>,
+    HashMap<String, PathBuf>,
+)> {
+    Deps::from_path(
+        &PathBuf::from(
+            "/Users/hariomnarang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/lib/libtorch.dylib",
+        ),
+        &manifest.python.sys.executable,
+        cwd,
+        &manifest.env.dyld_library_path,
+        &HashMap::new(),
+    )?;
+    panic!("hehe");
+    info!("gather files: Pass 1, begin");
     let (create_nodes, py_comps) = get_create_node_payloads(manifest)?;
-    let nodes: Result<Vec<Node>> = create_nodes
-        .iter()
-        .map(|create_node| {
-            generate_node(
-                create_node,
-                &manifest.python.sys.executable,
-                cwd,
-                &manifest.env.dyld_library_path,
-            )
-        })
-        .collect();
-    let nodes = nodes?;
-    Ok((nodes, py_comps))
+    let mut res = Vec::new();
+    let mut failures = Vec::new();
+    let empty_known_libs = HashMap::new();
+    for payload in &create_nodes {
+        let node = generate_node(
+            payload,
+            &manifest.python.sys.executable,
+            cwd,
+            &manifest.env.dyld_library_path,
+            &empty_known_libs,
+        );
+        match node {
+            Ok(node) => {
+                res.push(node);
+            }
+            Err(e) => {
+                warn!("failed to generate node in first pass, error={:?}", e);
+                failures.push(payload);
+            }
+        }
+    }
+
+    info!(
+        "gather files: Pass 2, begin, number of nodes to pass again: {}",
+        failures.len()
+    );
+    let mut known_libs = get_libs_scanned_in_nodes(&res)?;
+    for payload in failures {
+        let node = generate_node(
+            payload,
+            &manifest.python.sys.executable,
+            cwd,
+            &manifest.env.dyld_library_path,
+            &known_libs,
+        )?;
+        let (file_name, path) = get_lib_from_node(&node)?;
+        known_libs.insert(file_name, path);
+
+        res.push(node);
+    }
+    info!("gather files done");
+    Ok((res, py_comps, known_libs))
+}
+
+fn get_libs_scanned_in_nodes(nodes: &Vec<Node>) -> Result<HashMap<String, PathBuf>> {
+    let mut res = HashMap::new();
+    for node in nodes {
+        let (file_name, path) = get_lib_from_node(node)?;
+        res.insert(file_name, path);
+    }
+
+    Ok(res)
+}
+
+fn get_lib_from_node(node: &Node) -> Result<(String, PathBuf)> {
+    let file_name = node.path.file_name().expect(&format!(
+        "fatal error, impossible: found a node whose file_name could not be generated, path={}",
+        node.path.display()
+    ));
+    let file_name = file_name.to_str().with_context(|| {
+        anyhow!(
+            "failed in converting file_name to string, path={}",
+            file_name.display()
+        )
+    })?;
+    Ok((file_name.to_string(), node.path.clone()))
 }
 
 fn get_create_node_payloads(

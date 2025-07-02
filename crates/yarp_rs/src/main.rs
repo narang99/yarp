@@ -54,7 +54,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     // let p = PathBuf::from("@loader_path/../hello.so");
     // p.file_name().map(|f| {println!("fileeeeeeeeeeeeee {}", f.display())});
-    
+
     let yarp_manifest_path = args
         .get(1)
         .expect("Expected a single argument, the path the yarp manifest");

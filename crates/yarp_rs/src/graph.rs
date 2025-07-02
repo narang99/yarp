@@ -1,10 +1,13 @@
-use std::{fmt::Display, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::{manifest::Env, node::{deps::Deps, Node, Pkg}};
+use crate::{
+    manifest::Env,
+    node::{Node, Pkg, deps::Deps},
+};
 
 #[derive(Debug)]
 pub struct FileGraph {
@@ -68,12 +71,16 @@ impl FileGraph {
         }
     }
 
+    pub fn iter_nodes(&self) -> impl Iterator<Item = &Node> {
+        self.idx_by_node.right_values()
+    }
+
     /// Take a node, and recursively add its dependencies to the graph
     /// An edge is created from the dependency to the node
     /// If the node is already present in the graph, this node is not inserted
     /// And the currently present node is used for all functions
     /// Else we insert the node
-    pub fn add_tree(&mut self, node: Node) -> Result<NodeIndex> {
+    pub fn add_tree(&mut self, node: Node, known_libs: &HashMap<String, PathBuf>) -> Result<NodeIndex> {
         let idx = match self.idx_by_node.get_by_right(&node) {
             Some(idx) => *idx,
             None => {
@@ -87,16 +94,20 @@ impl FileGraph {
             idx
         ));
 
-        let deps = node
-            .deps
-            .find()?;
+        let deps = node.deps.find()?;
 
         for p in deps {
             let pkg = Pkg::from_path(&p);
-            let deps = Deps::from_path(&p, &self.executable_path, &self.cwd, &self.env.dyld_library_path)?;
+            let deps = Deps::from_path(
+                &p,
+                &self.executable_path,
+                &self.cwd,
+                &self.env.dyld_library_path,
+                &known_libs,
+            )?;
             let parent_node = Node::new(p.clone(), pkg, deps);
             let parent_idx = self
-                .add_tree(parent_node)
+                .add_tree(parent_node, known_libs)
                 .context(anyhow!("file: {}", p.display()))?;
             self.inner.add_edge(parent_idx, idx, ());
         }
@@ -132,12 +143,15 @@ impl FileGraph {
     }
 
     fn get_node_by_index_or_panic(&self, idx: NodeIndex) -> Node {
-        self.idx_by_node.get_by_left(&idx).expect(
-            &format!("corrupted graph state: could not find node for idx in edge, idx={:?}", idx)
-        ).clone()
+        self.idx_by_node
+            .get_by_left(&idx)
+            .expect(&format!(
+                "corrupted graph state: could not find node for idx in edge, idx={:?}",
+                idx
+            ))
+            .clone()
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -149,14 +163,20 @@ mod test {
     fn get_graph() -> FileGraph {
         let executable_path = PathBuf::from_str("/python").unwrap();
         let cwd = PathBuf::from_str(".").unwrap();
-        FileGraph::new(executable_path, cwd, Env {dyld_library_path: vec![]})
+        FileGraph::new(
+            executable_path,
+            cwd,
+            Env {
+                dyld_library_path: vec![],
+            },
+        )
     }
 
     #[test]
     fn test_add_node_single() {
         let mut graph = get_graph();
         let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]);
-        let idx = graph.add_tree(node).unwrap();
+        let idx = graph.add_tree(node, &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
         assert!(graph.idx_by_node.contains_left(&idx));
     }
@@ -171,7 +191,7 @@ mod test {
             vec![PathBuf::from_str("/libtest").unwrap()],
         );
 
-        graph.add_tree(py_node.clone()).unwrap();
+        graph.add_tree(py_node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 2);
         assert_eq!(graph.inner.edge_count(), 1);
         assert!(graph.idx_by_node.contains_right(&lib_test));
@@ -184,10 +204,10 @@ mod test {
 
         let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]);
 
-        graph.add_tree(node.clone()).unwrap();
+        graph.add_tree(node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
 
-        graph.add_tree(node.clone()).unwrap();
+        graph.add_tree(node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1); // Should not add duplicate
     }
 
@@ -213,7 +233,7 @@ mod test {
         graph.add_node(dep2.clone());
         graph.add_node(dep3.clone());
 
-        let result = graph.add_tree(main.clone());
+        let result = graph.add_tree(main.clone(), &HashMap::new());
         println!("*************end complex adding**********************");
         assert!(result.is_ok());
         assert_eq!(graph.inner.node_count(), 4);

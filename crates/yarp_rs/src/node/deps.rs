@@ -16,8 +16,9 @@ impl Deps {
         executable_path: &PathBuf,
         cwd: &PathBuf,
         dyld_library_path: &Vec<PathBuf>,
+        known_libs: &HashMap<String, PathBuf>,
     ) -> Result<Deps> {
-        let bin = Deps::new_macho_binary(path, executable_path, cwd, dyld_library_path);
+        let bin = Deps::new_macho_binary(path, executable_path, cwd, dyld_library_path, known_libs);
         match bin {
             Ok(bin) => Ok(Deps::Binary(bin)),
             Err(e) => {
@@ -39,6 +40,7 @@ impl Deps {
         executable_path: &PathBuf,
         cwd: &PathBuf,
         dyld_library_path: &Vec<PathBuf>,
+        known_libs: &HashMap<String, PathBuf>,
     ) -> Result<core::Binary> {
         match path.to_str() {
             None => {
@@ -48,8 +50,6 @@ impl Deps {
                 );
             }
             Some(p) => {
-                // TODO: get this from function params
-                let known_libs = HashMap::new();
                 let parsed = macho::parse(p, executable_path, cwd, dyld_library_path, &known_libs)?;
                 Ok(core::Binary::Macho(parsed))
             }
@@ -72,6 +72,7 @@ impl Deps {
         executable_path: &PathBuf,
         cwd: &PathBuf,
         dyld_library_path: &Vec<PathBuf>,
+        known_libs: &HashMap<String, PathBuf>,
     ) -> Result<Deps> {
         let ext = path.extension();
         match ext {
@@ -83,6 +84,7 @@ impl Deps {
                         executable_path,
                         cwd,
                         dyld_library_path,
+                        known_libs,
                     )?)
                 } else {
                     Ok(Deps::Plain)
@@ -99,7 +101,7 @@ impl Deps {
 
 #[cfg(test)]
 mod test {
-    use std::path::PathBuf;
+    use std::{collections::HashMap, path::PathBuf};
 
     use crate::node::deps::Deps;
 
@@ -110,8 +112,9 @@ mod test {
             PathBuf::from("/Users/hariomnarang/miniconda3/envs/platform/lib/libpango-1.0.0.dylib");
         let executable_path = PathBuf::from("/Users/hariomnarang/miniconda3/bin/python");
         let dyld_library_path = Vec::new();
+        let known_libs = HashMap::new();
         let cwd = PathBuf::from(".");
-        let dylib = Deps::new_binary(&path, &executable_path, &cwd, &dyld_library_path).unwrap();
+        let dylib = Deps::new_binary(&path, &executable_path, &cwd, &dyld_library_path, &known_libs).unwrap();
         let dylib = dylib.find().unwrap();
         dbg!(dylib);
     }

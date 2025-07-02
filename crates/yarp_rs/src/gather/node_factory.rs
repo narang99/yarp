@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, anyhow};
 use pathdiff::diff_paths;
@@ -9,6 +9,7 @@ use crate::{
     pkg::paths::is_shared_library,
 };
 
+#[derive(Debug, Clone)]
 pub enum CreateNode {
     Executable {
         path: PathBuf,
@@ -41,10 +42,29 @@ pub fn generate_node(
     executable_path: &PathBuf,
     cwd: &PathBuf,
     dyld_library_path: &Vec<PathBuf>,
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
-    let make_node = |pkg, path| mk_node(path, executable_path, cwd, dyld_library_path, pkg);
+    let make_node = |pkg, path| {
+        mk_node(
+            path,
+            executable_path,
+            cwd,
+            dyld_library_path,
+            pkg,
+            known_libs,
+        )
+    };
     match payload {
-        CreateNode::Executable { path } => get_executable_node(path, cwd, dyld_library_path),
+        CreateNode::Executable { path } => {
+            let deps = Deps::new_binary(
+                executable_path,
+                executable_path,
+                cwd,
+                dyld_library_path,
+                known_libs,
+            )?;
+            Ok(Node::new(path.clone(), Pkg::Executable, deps))
+        }
         CreateNode::ExecPrefixPkg {
             path,
             original_prefix,
@@ -69,7 +89,7 @@ pub fn generate_node(
         CreateNode::BinaryInLdPath { path } => Ok(Node::new(
             path.clone(),
             Pkg::BinaryInLDPath,
-            Deps::new_binary(&path, executable_path, cwd, dyld_library_path)?,
+            Deps::new_binary(&path, executable_path, cwd, dyld_library_path, known_libs)?,
         )),
     }
 }
@@ -80,22 +100,10 @@ fn mk_node(
     cwd: &PathBuf,
     dyld_library_path: &Vec<PathBuf>,
     pkg: Pkg,
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
-    let deps = Deps::from_path(p, executable_path, cwd, dyld_library_path)?;
+    let deps = Deps::from_path(p, executable_path, cwd, dyld_library_path, known_libs)?;
     Ok(Node::new(p.clone(), pkg, deps))
-}
-
-fn get_executable_node(
-    executable_path: &PathBuf,
-    cwd: &PathBuf,
-    dyld_library_path: &Vec<PathBuf>,
-) -> Result<Node> {
-    let p = executable_path.clone();
-    Ok(Node::new(
-        p,
-        Pkg::Executable,
-        Deps::new_binary(executable_path, executable_path, cwd, dyld_library_path)?,
-    ))
 }
 
 fn get_exec_prefix_pkg(
