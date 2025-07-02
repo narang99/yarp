@@ -1,7 +1,7 @@
 // patching libraries to work with the new symlink tree
 // basically all install_name_tool operations
 
-use std::{fs, path::PathBuf, process::{Command}};
+use std::{path::PathBuf, process::{Command}};
 
 use anyhow::{Result, anyhow, bail};
 use pathdiff::diff_paths;

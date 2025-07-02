@@ -3,7 +3,7 @@ use std::env;
 
 use log::info;
 
-use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::{move_to_dist, patch::patch_lib}};
+use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::move_to_dist};
 
 pub mod pkg;
 pub mod gather;

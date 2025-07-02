@@ -13,7 +13,7 @@ use lief::macho::{
     Commands,
     commands::{Command, LoadCommandTypes},
 };
-use log::{debug, info};
+use log::debug;
 
 use crate::node::deps::core::Macho;
 

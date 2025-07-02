@@ -3,11 +3,10 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
-use log::{debug, info};
 use pathdiff::diff_paths;
 
 use crate::{
-    node::{Node, Pkg},
+    node::Node,
     pkg::{
         export::{Export, mk_parent_dirs},
         patch::{LibPatch},
@@ -112,5 +111,3 @@ fn mk_symlink_farm(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<Opti
         Ok(())
     }).transpose()
 }
-
-fn patch_binary_library() {}
