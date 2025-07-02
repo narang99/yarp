@@ -1,7 +1,7 @@
 // patching libraries to work with the new symlink tree
 // basically all install_name_tool operations
 
-use std::{path::PathBuf, process::{Command}};
+use std::{path::PathBuf, process::{Command, Stdio}};
 
 use anyhow::{Result, anyhow, bail};
 use pathdiff::diff_paths;
@@ -110,6 +110,7 @@ fn get_new_rpath(real_path: &PathBuf, symlink_farm: &PathBuf) -> Result<String> 
 
 fn rm_rpath(rpath: &str, path: &PathBuf) -> Result<()> {
     let status = Command::new("install_name_tool")
+        .stderr(Stdio::null())
         .arg("-delete_rpath")
         .arg(rpath)
         .arg(path)
@@ -129,6 +130,7 @@ fn rm_rpath(rpath: &str, path: &PathBuf) -> Result<()> {
 
 fn add_rpath(rpath: &str, path: &PathBuf) -> Result<()> {
     let status = Command::new("install_name_tool")
+        .stderr(Stdio::null())
         .arg("-add_rpath")
         .arg(rpath)
         .arg(path)
@@ -148,6 +150,7 @@ fn add_rpath(rpath: &str, path: &PathBuf) -> Result<()> {
 
 fn modify_load_command(old: &str, new: &str, path: &PathBuf) -> Result<()> {
     let status = Command::new("install_name_tool")
+        .stderr(Stdio::null())
         .arg("-change")
         .arg(old)
         .arg(new)
@@ -169,6 +172,7 @@ fn modify_load_command(old: &str, new: &str, path: &PathBuf) -> Result<()> {
 
 fn set_dylib_id(id: String, path: &PathBuf) -> Result<()> {
     let status = Command::new("install_name_tool")
+        .stderr(Stdio::null())
         .arg("-id")
         .arg(&id)
         .arg(path)
@@ -188,6 +192,7 @@ fn set_dylib_id(id: String, path: &PathBuf) -> Result<()> {
 
 fn sign_dylib(path: &PathBuf) -> Result<()> {
     let status = Command::new("codesign")
+        .stderr(Stdio::null())
         .arg("-s")
         .arg("-")
         .arg("-f")

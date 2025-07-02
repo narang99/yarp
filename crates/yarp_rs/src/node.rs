@@ -42,6 +42,7 @@ pub enum Pkg {
 
     Executable,
     Binary,
+    BinaryInLDPath,
     Plain,
 }
 

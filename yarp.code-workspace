@@ -23,6 +23,7 @@
 			"libdep",
 			"libpango",
 			"libtest",
+			"pathdiff",
 			"petgraph",
 			"platlibdir",
 			"pures",

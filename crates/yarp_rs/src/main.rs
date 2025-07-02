@@ -1,17 +1,19 @@
-use std::env;
-
+use std::{env, path::PathBuf};
 
 use log::info;
 
-use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::move_to_dist};
+use crate::{
+    gather::build_graph_from_manifest,
+    graph::FileGraph,
+    manifest::YarpManifest,
+    pkg::{bootstrap::write_bootstrap_script, move_to_dist},
+};
 
-pub mod pkg;
 pub mod gather;
 pub mod graph;
 pub mod manifest;
 pub mod node;
-
-
+pub mod pkg;
 
 /**
  * Algorithm:
@@ -22,7 +24,7 @@ pub mod node;
  *   - this operation can add new nodes that are not present in the graph too
  * - Topologically sort the graph, call to_destination for each node
  * - create bootstrap scripts
- * 
+ *
  * All file types
  * - python file inside a site-packages folder
  * - unknown file inside a site-packages folder
@@ -37,17 +39,15 @@ pub mod node;
  *   - again, handling same as dylib, but destination different
  * - might be useful to have a destination object in these files i think
  * - finally we have pythonexe, which has same handling as dylib, but destination is different
- * 
+ *
  * We call all of these binary file
- * 
- * 
+ *
+ *
  * - binary file (with destination)
  * - plain file (with destination)
- * 
+ *
  * reals is same for both, how they are symlinked to correct location is different
  */
-
-
 
 fn main() {
     env_logger::init();
@@ -62,11 +62,32 @@ fn main() {
     let manifest: YarpManifest =
         serde_json::from_str(&manifest_contents).expect("Failed to parse yarp manifest as JSON");
     let cwd = env::current_dir().unwrap();
-    let graph = build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
+    let (graph, path_components) =
+        build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
     let dist = cwd.join("dist");
-    info!("moving files to dist");
+    info!("path components: {:?}", path_components);
+    if dist.exists() {
+        info!("found existing dist, removing. path={}", dist.display());
+        std::fs::remove_dir_all(&dist).expect(&format!(
+            "Failed to remove existing dist directory at {}",
+            dist.display()
+        ));
+    }
+    move_all_nodes(&graph, &dist);
+    write_bootstrap_script(&dist, &path_components, &manifest.python.sys.version)
+        .expect("failed in writing bootstrap script");
+}
+
+fn move_all_nodes(graph: &FileGraph, dist: &PathBuf) {
+    info!("exporting files to dist");
+    let total = graph.len();
+    let mut i = 0;
     for node in graph.toposort().unwrap() {
         let deps = graph.get_node_dependencies(&node);
-        move_to_dist(&node, &deps, &dist).unwrap();
+        move_to_dist(&node, &deps, dist).unwrap();
+        i += 1;
+        if i % (total / 10) == 0 {
+            info!("exported {}/{} files", i, total);
+        }
     }
 }

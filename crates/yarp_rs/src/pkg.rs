@@ -17,6 +17,7 @@ use crate::{
 pub mod export;
 pub mod patch;
 pub mod paths;
+pub mod bootstrap;
 
 pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()> {
     // todo: python executable does not have a symlink farm, fix that

@@ -9,7 +9,10 @@ use std::path::PathBuf;
 
 use log::error;
 
-use crate::node::{Pkg, PkgSitePackages, PrefixPackages};
+use crate::{
+    manifest::Version,
+    node::{Pkg, PkgSitePackages, PrefixPackages},
+};
 
 pub trait ExportedFileTree {
     // returns the destination if there is an actual destination
@@ -35,7 +38,8 @@ impl ExportedFileTree for Pkg {
                 Some(prefix_path_in_dist(prefix_pkgs, dist))
             }
             Pkg::Plain => None,
-            Pkg::Binary => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
+            Pkg::BinaryInLDPath => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
+            Pkg::Binary => None,
             Pkg::Executable => Some(dist.join("python").join("bin").join("python")),
         }
     }
@@ -50,6 +54,7 @@ impl ExportedFileTree for Pkg {
 
             Pkg::SitePackagesBinary(_)
             | Pkg::Binary
+            | Pkg::BinaryInLDPath
             | Pkg::PrefixBinary(_)
             | Pkg::ExecPrefixBinary(_) => reals_path(path, dist),
         }
@@ -59,13 +64,13 @@ impl ExportedFileTree for Pkg {
         match self {
             Pkg::SitePackagesPlain(_)
             | Pkg::Plain
-            // | Pkg::Executable
             | Pkg::ExecPrefixPlain(_)
             | Pkg::PrefixPlain(_) => None,
 
             Pkg::SitePackagesBinary(_)
             | Pkg::Executable
             | Pkg::Binary
+            | Pkg::BinaryInLDPath
             | Pkg::ExecPrefixBinary(_)
             | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),
         }
@@ -73,24 +78,35 @@ impl ExportedFileTree for Pkg {
 }
 
 fn site_pkgs_path_in_dist(site_pkgs: &PkgSitePackages, dist: &PathBuf) -> PathBuf {
-    dist.join("site_packages")
-        .join(&site_pkgs.alias)
+    dist.join(site_pkgs_relative_path(&site_pkgs.alias))
         .join(&site_pkgs.rel_path)
 }
 
+pub fn site_pkgs_relative_path(alias: &str) -> PathBuf {
+    PathBuf::from("site_packages").join(alias)
+}
+
 fn exec_prefix_path_in_dist(prefix_pkgs: &PrefixPackages, dist: &PathBuf) -> PathBuf {
-    dist.join("python")
-        .join("lib")
-        .join(prefix_pkgs.version.get_python_version())
-        .join("lib-dynload")
+    dist.join(lib_dynload_relative_path(&prefix_pkgs.version))
         .join(&prefix_pkgs.rel_path)
 }
 
-fn prefix_path_in_dist(prefix_pkgs: &PrefixPackages, dist: &PathBuf) -> PathBuf {
-    dist.join("python")
+pub fn lib_dynload_relative_path(version: &Version) -> PathBuf {
+    PathBuf::from("python")
         .join("lib")
-        .join(prefix_pkgs.version.get_python_version())
+        .join(version.get_python_version())
+        .join("lib-dynload")
+}
+
+fn prefix_path_in_dist(prefix_pkgs: &PrefixPackages, dist: &PathBuf) -> PathBuf {
+    dist.join(stdlib_relative_path(&prefix_pkgs.version))
         .join(&prefix_pkgs.rel_path)
+}
+
+pub fn stdlib_relative_path(version: &Version) -> PathBuf {
+    PathBuf::from("python")
+        .join("lib")
+        .join(version.get_python_version())
 }
 
 fn reals_path(path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
@@ -121,8 +137,6 @@ fn loose_validate_path_is_file(path: &PathBuf) {
         }
     }
 }
-
-
 
 pub fn is_shared_library(path: &PathBuf) -> bool {
     let ext = path.extension();

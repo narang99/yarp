@@ -47,6 +47,10 @@ impl FileGraph {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.inner.node_count()
+    }
+
     /// simply add a node to the graph, this is a plain operation
     /// No dependency analysis or edge making is done
     /// use `add_tree` for that

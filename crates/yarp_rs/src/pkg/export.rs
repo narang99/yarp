@@ -23,6 +23,7 @@ impl Export for Pkg {
 
             Pkg::SitePackagesBinary(_)
             | Pkg::Binary
+            | Pkg::BinaryInLDPath
             | Pkg::PrefixBinary(_)
             | Pkg::ExecPrefixBinary(_) => {
                 if !dest.starts_with(&dist) {

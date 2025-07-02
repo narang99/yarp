@@ -1,6 +1,6 @@
 // use core::unimplemented;
 // // given a yarp manifest, gather all the nodes that we can discover
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, anyhow, bail};
 use log::info;
@@ -8,16 +8,24 @@ use pathdiff::diff_paths;
 use rand::{Rng, rng};
 use walkdir::WalkDir;
 
+mod site_pkgs_comp;
+pub use site_pkgs_comp::PythonPathComponent;
+
 use crate::{
+    gather::site_pkgs_comp::get_python_path_mapping,
     graph::FileGraph,
     manifest::{Sys, Version, YarpManifest},
     node::{Node, Pkg, PkgSitePackages, PrefixPackages, deps::Deps},
     pkg::paths::is_shared_library,
 };
 
-pub fn build_graph_from_manifest(manifest: &YarpManifest, cwd: &PathBuf) -> Result<FileGraph> {
-    let nodes = get_python_universe(manifest, cwd)?;
-    build_graph(nodes, manifest.python.sys.executable.clone(), cwd.clone())
+pub fn build_graph_from_manifest(
+    manifest: &YarpManifest,
+    cwd: &PathBuf,
+) -> Result<(FileGraph, Vec<PythonPathComponent>)> {
+    let (nodes, path_components) = get_python_universe(manifest, cwd)?;
+    let g = build_graph(nodes, manifest.python.sys.executable.clone(), cwd.clone())?;
+    Ok((g, path_components))
 }
 
 fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Result<FileGraph> {
@@ -34,7 +42,10 @@ fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Resu
     for node in nodes {
         g.add_tree(node)?;
     }
-    info!("graph built successfully");
+    info!(
+        "graph built successfully, nodes inserted in graph={}",
+        g.len()
+    );
     Ok(g)
 }
 
@@ -49,7 +60,10 @@ fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Resu
  * We are also handling the python interpreter separately
  * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
  */
-pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec<Node>> {
+pub fn get_python_universe(
+    manifest: &YarpManifest,
+    cwd: &PathBuf,
+) -> Result<(Vec<Node>, Vec<PythonPathComponent>)> {
     // given a manifest, we have exec_prefix, prefix and site-packages
     // go through all recursively and get corresponding nodes for each
     let mut nodes = Vec::new();
@@ -77,6 +91,7 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
         &sys.version,
         &sys.executable,
         cwd,
+        &random_string(),
         get_exec_prefix_pkg,
     )?);
 
@@ -92,16 +107,23 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
         &sys.version,
         &sys.executable,
         cwd,
+        &random_string(),
         get_prefix_pkg,
     )?);
 
     // do site-packages in the end
     let site_pkgs = get_site_pkgs_without_prefixes(&sys.path, &lib_dynload_path, &stdlib_path);
-    let site_pkgs = only_top_level_site_pkgs(&site_pkgs);
+    let site_pkgs = only_top_level_site_pkgs(&site_pkgs, &lib_dynload_path, &stdlib_path);
+    let site_pkg_by_alias = create_site_pkgs_alias(&site_pkgs);
+
     info!(
         "gathering files from site-packages: {:?} original={:?}",
         site_pkgs, sys.path
     );
+    let mut site_pkg_aliases = std::collections::HashMap::new();
+    for site_pkg in &site_pkgs {
+        site_pkg_aliases.insert(site_pkg, random_string());
+    }
     for site_pkg in &site_pkgs {
         if !site_pkg.exists() {
             // its valid for a pythonpath to not exist
@@ -112,24 +134,70 @@ pub fn get_python_universe(manifest: &YarpManifest, cwd: &PathBuf) -> Result<Vec
             continue;
         }
         info!(
-            "gathering files from site-packages, site-package={}",
-            site_pkg.display()
+            "gathering files from site-packages, site-package={} alias={:?}",
+            site_pkg.display(),
+            site_pkg_by_alias.get(site_pkg)
         );
         nodes.extend(get_nodes_recursive(
             site_pkg,
             &sys.version,
             &sys.executable,
             cwd,
+            site_pkg_by_alias.get(site_pkg).expect(&format!("fatal: could not find alias for site-packages, site_pkg={:?} site-packages-map={:?}", site_pkg, site_pkg_by_alias)),
             get_site_packages_pkg,
         )?);
     }
 
-    Ok(nodes)
+    nodes.extend(get_loaded_nodes_from_manifest(manifest, &sys.executable, cwd)?);
+
+    let py_path_comps = get_python_path_mapping(
+        &site_pkg_by_alias,
+        &stdlib_path,
+        &lib_dynload_path,
+        &sys.path,
+    );
+    Ok((nodes, py_path_comps))
+}
+
+fn get_loaded_nodes_from_manifest(
+    manifest: &YarpManifest,
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+) -> Result<Vec<Node>> {
+    let mut res = Vec::new();
+    for p in &manifest.loads {
+        res.push(Node::new(
+            p.path.clone(),
+            Pkg::BinaryInLDPath,
+            Deps::new_binary(&p.path, executable_path, cwd)?,
+        ))
+    }
+    for p in &manifest.modules.extensions {
+        res.push(Node::new(
+            p.path.clone(),
+            Pkg::BinaryInLDPath,
+            Deps::new_binary(&p.path, executable_path, cwd)?,
+        ))
+    }
+
+    Ok(res)
+}
+
+fn create_site_pkgs_alias(site_pkgs: &Vec<PathBuf>) -> HashMap<PathBuf, String> {
+    let mut site_pkg_aliases = std::collections::HashMap::new();
+    for site_pkg in site_pkgs {
+        site_pkg_aliases.insert(site_pkg.clone(), random_string());
+    }
+    site_pkg_aliases
 }
 
 fn get_executable_node(executable_path: &PathBuf, cwd: &PathBuf) -> Result<Node> {
     let p = executable_path.clone();
-    Ok(Node::new(p, Pkg::Executable, Deps::new_binary(executable_path, executable_path, cwd)?))
+    Ok(Node::new(
+        p,
+        Pkg::Executable,
+        Deps::new_binary(executable_path, executable_path, cwd)?,
+    ))
 }
 
 fn get_nodes_recursive<F>(
@@ -137,6 +205,7 @@ fn get_nodes_recursive<F>(
     version: &Version,
     executable_path: &PathBuf,
     cwd: &PathBuf,
+    alias: &String,
     callback: F,
 ) -> Result<Vec<Node>>
 where
@@ -149,10 +218,10 @@ where
         );
     }
     let paths = get_paths_recursive_from_dir(directory)?;
-    let alias = random_string();
+    // let alias = random_string();
     let mut nodes = Vec::with_capacity(paths.len());
     for p in paths {
-        let pkg = callback(&p, directory, &alias, version)?;
+        let pkg = callback(&p, directory, alias, version)?;
         let deps = Deps::from_path(&p, executable_path, cwd)?;
         nodes.push(Node::new(p, pkg, deps));
     }
@@ -235,17 +304,31 @@ fn get_site_pkgs_without_prefixes(
         .collect()
 }
 
-fn only_top_level_site_pkgs(sys_path: &Vec<PathBuf>) -> Vec<PathBuf> {
+fn only_top_level_site_pkgs(
+    sys_path: &Vec<PathBuf>,
+    lib_dynload: &PathBuf,
+    stdlib: &PathBuf,
+) -> Vec<PathBuf> {
+    let mut all_paths_to_check: Vec<&PathBuf> = sys_path.iter().collect();
+    all_paths_to_check.push(lib_dynload);
+    all_paths_to_check.push(stdlib);
+
     sys_path
         .iter()
-        .filter(|p| !is_sub_path_of_other_pkgs(p, &sys_path))
+        .filter(|p| {
+            let should_keep = !is_sub_path_of_other_pkgs(p, &all_paths_to_check);
+            if !should_keep {
+                info!("package {} is a nested site-package, ignoring", p.display());
+            }
+            should_keep
+        })
         .map(|p| p.clone())
         .collect()
 }
 
-fn is_sub_path_of_other_pkgs(p: &PathBuf, sys_path: &Vec<PathBuf>) -> bool {
+fn is_sub_path_of_other_pkgs(p: &PathBuf, sys_path: &Vec<&PathBuf>) -> bool {
     for other in sys_path {
-        if p != other && p.starts_with(other) {
+        if *p != **other && p.starts_with(other) {
             return true;
         }
     }
