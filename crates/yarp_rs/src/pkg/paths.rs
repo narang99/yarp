@@ -59,11 +59,12 @@ impl ExportedFileTree for Pkg {
         match self {
             Pkg::SitePackagesPlain(_)
             | Pkg::Plain
-            | Pkg::Executable
+            // | Pkg::Executable
             | Pkg::ExecPrefixPlain(_)
             | Pkg::PrefixPlain(_) => None,
 
             Pkg::SitePackagesBinary(_)
+            | Pkg::Executable
             | Pkg::Binary
             | Pkg::ExecPrefixBinary(_)
             | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),

@@ -34,6 +34,7 @@ fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Resu
     for node in nodes {
         g.add_tree(node)?;
     }
+    info!("graph built successfully");
     Ok(g)
 }
 

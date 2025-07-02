@@ -2,9 +2,11 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 
-mod core;
+pub mod core;
 mod macho;
 
+
+// TODO: remove and move this, no need for two identifiers
 pub use core::Deps;
 
 use crate::node::deps::macho::get_deps_from_macho;

@@ -13,7 +13,7 @@ use lief::macho::{
     Commands,
     commands::{Command, LoadCommandTypes},
 };
-use log::info;
+use log::{debug, info};
 
 use crate::node::deps::core::Macho;
 
@@ -132,7 +132,7 @@ fn get_load_commands(
                 LoadCommandTypes::LoadDylib => {
                     let val = dylib.name();
                     if is_load_cmd_path_sys_lib(&val) {
-                        info!(
+                        debug!(
                             "skipping system library {} in macho parsing, dependency of {}",
                             val, macho_path
                         );

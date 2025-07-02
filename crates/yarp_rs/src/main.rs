@@ -1,7 +1,9 @@
 use std::env;
 
 
-use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::move_to_dist};
+use log::info;
+
+use crate::{gather::build_graph_from_manifest, manifest::YarpManifest, pkg::{move_to_dist, patch::patch_lib}};
 
 pub mod pkg;
 pub mod gather;
@@ -62,6 +64,7 @@ fn main() {
     let cwd = env::current_dir().unwrap();
     let graph = build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
     let dist = cwd.join("dist");
+    info!("moving files to dist");
     for node in graph.toposort().unwrap() {
         let deps = graph.get_node_dependencies(&node);
         move_to_dist(&node, &deps, &dist).unwrap();
