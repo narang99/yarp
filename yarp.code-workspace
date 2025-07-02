@@ -16,6 +16,7 @@
 			"bimap",
 			"cpython",
 			"dlopen",
+			"dyld",
 			"dylib",
 			"dynload",
 			"ftypes",

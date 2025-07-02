@@ -6,16 +6,18 @@
 use std::{
     collections::HashMap,
     path::{Component, Path, PathBuf},
+    str::FromStr,
 };
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use lief::macho::{
-    Commands,
+    Binary, Commands,
     commands::{Command, LoadCommandTypes},
+    header::CpuType,
 };
-use log::debug;
+use log::{debug, warn};
 
-use crate::node::deps::core::Macho;
+use crate::node::deps::core::{BinaryParseError, Macho};
 
 #[derive(Debug)]
 struct PathResolverCtx<'a> {
@@ -25,9 +27,10 @@ struct PathResolverCtx<'a> {
 }
 
 #[derive(Debug)]
-pub struct SharedLibCtx<'a> {
+struct SharedLibCtx<'a> {
     executable_path: &'a PathBuf,
     cwd: &'a PathBuf,
+    dyld_library_path: &'a Vec<PathBuf>,
 }
 
 pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
@@ -42,16 +45,27 @@ pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
 /// Parsing logic depends on three kinds of paths
 /// First is an actual path, denoted by Path/PathBuf
 /// Second is a string path that needs resolution
-pub fn parse(macho_path: &str, executable_path: &PathBuf, cwd: &PathBuf) -> Result<Macho> {
+pub fn parse(
+    macho_path: &str,
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<Macho> {
     let ctx = SharedLibCtx {
         executable_path,
         cwd,
+        dyld_library_path,
     };
-    _parse(macho_path, &ctx)
+    _parse(macho_path, &ctx, known_libs)
         .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path, ctx))
 }
 
-fn _parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
+fn _parse(
+    macho_path: &str,
+    ctx: &SharedLibCtx,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<Macho> {
     let buf = PathBuf::from(macho_path);
     if !buf.exists() {
         bail!(
@@ -59,17 +73,43 @@ fn _parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
             macho_path
         );
     }
-    let fat = lief::macho::parse(macho_path).unwrap();
-    if fat.iter().count() > 1 {
-        panic!(
-            "found a FAT Macho binary, `yarp` currently does not support this binary type, path={}",
-            macho_path
-        )
+    let maybe_fat = lief::macho::parse(macho_path);
+    let fat = match maybe_fat {
+        Some(fat) => fat,
+        None => {
+            warn!(
+                "tried parsing {} as a binary, but its not a binary, will move and use it as a plain file",
+                macho_path
+            );
+            return Err(Error::new(BinaryParseError::NotBinary));
+        }
+    };
+    let host_cpu_type = get_host_cpu_type()?;
+
+    for macho in fat.iter() {
+        // im going through all binaries inside the fat binary and creating everyone's Macho struct
+        // this is extra work, we could just check the host header first, and if its not of our arch, move on
+        // only problem is, if I'm calling `header()` before `load_commands()` for binaries, its randomly segfaulting
+        // if we call `header()` later, it does not happen
+        let (parsed, cpu_type) = _parse_single_macho(&buf, macho_path, macho, ctx, known_libs)?;
+        if cpu_type == host_cpu_type {
+            return Ok(parsed);
+        }
     }
-    let macho = fat.iter().next().expect(&format!(
-        "expected fat binary to have one macho file, got 0, path={}",
-        macho_path
-    ));
+    warn!(
+        "No binary found inside FAT Macho Binary for the host architecture, ignoring. path={} arch={:?}",
+        macho_path, host_cpu_type
+    );
+    return Err(Error::new(BinaryParseError::UnsupportedArchitecture));
+}
+
+fn _parse_single_macho(
+    buf: &PathBuf,
+    macho_path: &str,
+    macho: Binary,
+    ctx: &SharedLibCtx,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<(Macho, CpuType)> {
     let loader_path = buf
         .parent()
         .ok_or(anyhow!(
@@ -78,21 +118,47 @@ fn _parse(macho_path: &str, ctx: &SharedLibCtx) -> Result<Macho> {
         ))?
         .to_path_buf();
 
-    let rpaths = get_rpaths(&macho, ctx.executable_path, ctx.cwd, &loader_path)
-        .context(anyhow!("failed in parsing rpath"))?;
+    let rpaths = get_rpaths(
+        &macho,
+        ctx.executable_path,
+        ctx.cwd,
+        &loader_path,
+        &ctx.dyld_library_path,
+    )
+    .context(anyhow!("failed in parsing rpath"))?;
     let resolver_ctx = PathResolverCtx {
         loader_path: &loader_path,
         rpaths: rpaths.iter().map(|(_, rpath)| rpath.clone()).collect(),
         shared_lib_ctx: ctx,
     };
-    let (id_dylib, load_cmds) = get_load_commands(&macho, &macho_path, &resolver_ctx)
-        .context(anyhow!("failed in parsing load commands"))?;
-    Ok(Macho {
-        load_cmds,
-        rpaths,
-        id_dylib,
-        path: buf,
-    })
+    let (id_dylib, load_cmds) = get_load_commands(&macho, &macho_path, &resolver_ctx, known_libs)
+        .context(anyhow!(
+        "failed in parsing load commands for {}",
+        macho_path
+    ))?;
+
+    // NOTE: make sure to always call `header` in the end, if called before `load_commands`, we get random segfaults
+    Ok((
+        Macho {
+            load_cmds,
+            rpaths,
+            id_dylib,
+            path: buf.clone(),
+        },
+        macho.header().cpu_type(),
+    ))
+}
+
+fn get_host_cpu_type() -> Result<CpuType> {
+    let current_arch = std::env::consts::ARCH;
+    match current_arch {
+        "x86_64" => Ok(CpuType::X86_64),
+        "aarch64" => Ok(CpuType::ARM64),
+        _ => bail!(
+            "unsupported host architecture {}, only x86_64 and aarch64 are supported",
+            current_arch
+        ),
+    }
 }
 
 fn get_rpaths(
@@ -100,13 +166,14 @@ fn get_rpaths(
     executable_path: &PathBuf,
     cwd: &PathBuf,
     loader_path: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
 ) -> Result<HashMap<String, PathBuf>> {
     let mut rpaths = HashMap::new();
     for cmd in macho.commands() {
         match cmd {
             Commands::RPath(rpath) => {
                 let val = rpath.path();
-                let p = resolve_rpath(&val, executable_path, cwd, loader_path)
+                let p = resolve_rpath(&val, executable_path, cwd, loader_path, dyld_library_path)
                     .context(anyhow!("failed in resolving rpath={}", val))?;
                 if let Some(inner) = p {
                     rpaths.insert(val, inner);
@@ -122,6 +189,7 @@ fn get_load_commands(
     macho: &lief::macho::Binary,
     macho_path: &str,
     ctx: &PathResolverCtx,
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<(Option<String>, HashMap<String, PathBuf>)> {
     let mut id_dylib = None;
     let mut load_cmds = HashMap::new();
@@ -138,21 +206,27 @@ fn get_load_commands(
                         );
                         continue;
                     }
-                    let p = resolve_load_cmd_path(&val, ctx).with_context(|| {
-                        format!("failed in resolving load command={} ctx={:?}", val, ctx)
-                    })?;
+                    let p =
+                        resolve_load_cmd_path_with_dyld_fallback(&val, ctx).with_context(|| {
+                            format!("failed in resolving load command={} ctx={:?}", val, ctx)
+                        })?;
                     match p {
                         Some(p) => {
                             let p = normalize_path(&p);
                             load_cmds.insert(val, p);
                         }
-                        None => {
-                            bail!(
-                                "could not find dependency for load_cmd={} ctx={:?}",
-                                val,
-                                ctx
-                            );
-                        }
+                        None => match known_libs.get(&val) {
+                            None => {
+                                bail!(
+                                    "could not find dependency for load_cmd={} ctx={:?}",
+                                    val,
+                                    ctx
+                                );
+                            }
+                            Some(lib_path) => {
+                                load_cmds.insert(val, lib_path.clone());
+                            }
+                        },
                     }
                 }
                 _ => {}
@@ -173,6 +247,7 @@ fn resolve_rpath(
     executable_path: &PathBuf,
     cwd: &PathBuf,
     loader_path: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
 ) -> Result<Option<PathBuf>> {
     if load_cmd_rpath.starts_with("@rpath/") {
         bail!(
@@ -186,9 +261,43 @@ fn resolve_rpath(
         shared_lib_ctx: &SharedLibCtx {
             executable_path: executable_path,
             cwd: cwd,
+            dyld_library_path,
         },
     };
     resolve_load_cmd_path(load_cmd_rpath, ctx)
+}
+
+fn resolve_load_cmd_path_with_dyld_fallback(
+    load_cmd_path: &str,
+    ctx: &PathResolverCtx,
+) -> Result<Option<PathBuf>> {
+    let resolved = resolve_load_cmd_path(load_cmd_path, ctx)?;
+    match resolved {
+        Some(resolved) => Ok(Some(resolved)),
+        None => {
+            let resolved = find_in_dirs(load_cmd_path, &ctx.shared_lib_ctx.dyld_library_path)?;
+            Ok(resolved)
+        }
+    }
+}
+
+fn find_in_dirs(load_cmd_path: &str, dirs: &Vec<PathBuf>) -> Result<Option<PathBuf>> {
+    let p = PathBuf::from_str(load_cmd_path).context(format!(
+        "failure in converting load_cmd to PathBuf, cmd={}",
+        load_cmd_path
+    ))?;
+    match p.file_name() {
+        None => Ok(None),
+        Some(file_name) => {
+            for dir in dirs {
+                let candidate = dir.join(file_name);
+                if candidate.exists() {
+                    return Ok(Some(candidate.clone()));
+                }
+            }
+            Ok(None)
+        }
+    }
 }
 
 /// given a load command, this function would try to resolve it

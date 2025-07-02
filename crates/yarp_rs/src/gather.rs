@@ -14,28 +14,38 @@ pub use site_pkgs_comp::PythonPathComponent;
 use crate::{
     gather::site_pkgs_comp::get_python_path_mapping,
     graph::FileGraph,
-    manifest::{Sys, Version, YarpManifest},
+    manifest::{Env, Sys, Version, YarpManifest},
     node::{Node, Pkg, PkgSitePackages, PrefixPackages, deps::Deps},
     pkg::paths::is_shared_library,
 };
 
 pub fn build_graph_from_manifest(
-    manifest: &YarpManifest,
+    manifest: &Box<YarpManifest>,
     cwd: &PathBuf,
 ) -> Result<(FileGraph, Vec<PythonPathComponent>)> {
     let (nodes, path_components) = get_python_universe(manifest, cwd)?;
-    let g = build_graph(nodes, manifest.python.sys.executable.clone(), cwd.clone())?;
+    let g = build_graph(
+        nodes,
+        manifest.python.sys.executable.clone(),
+        cwd.clone(),
+        manifest.env.clone(),
+    )?;
     Ok((g, path_components))
 }
 
-fn build_graph(nodes: Vec<Node>, executable_path: PathBuf, cwd: PathBuf) -> Result<FileGraph> {
+fn build_graph(
+    nodes: Vec<Node>,
+    executable_path: PathBuf,
+    cwd: PathBuf,
+    env: Env,
+) -> Result<FileGraph> {
     info!(
         "building graph, number of nodes={} executable_path={} cwd={}",
         nodes.len(),
         executable_path.display(),
         cwd.display()
     );
-    let mut g = FileGraph::new(executable_path, cwd);
+    let mut g = FileGraph::new(executable_path, cwd, env);
     for node in &nodes {
         g.add_node(node.clone());
     }
@@ -69,7 +79,11 @@ pub fn get_python_universe(
     let mut nodes = Vec::new();
     let sys = &manifest.python.sys;
 
-    nodes.push(get_executable_node(&sys.executable, cwd)?);
+    nodes.push(get_executable_node(
+        &sys.executable,
+        cwd,
+        &manifest.env.dyld_library_path,
+    )?);
 
     // the order of nodes collection is important
     // exec prefix and prefix can be inside site-packages
@@ -91,6 +105,7 @@ pub fn get_python_universe(
         &sys.version,
         &sys.executable,
         cwd,
+        &manifest.env.dyld_library_path,
         &random_string(),
         get_exec_prefix_pkg,
     )?);
@@ -107,6 +122,7 @@ pub fn get_python_universe(
         &sys.version,
         &sys.executable,
         cwd,
+        &manifest.env.dyld_library_path,
         &random_string(),
         get_prefix_pkg,
     )?);
@@ -143,12 +159,18 @@ pub fn get_python_universe(
             &sys.version,
             &sys.executable,
             cwd,
+            &manifest.env.dyld_library_path,
             site_pkg_by_alias.get(site_pkg).expect(&format!("fatal: could not find alias for site-packages, site_pkg={:?} site-packages-map={:?}", site_pkg, site_pkg_by_alias)),
             get_site_packages_pkg,
         )?);
     }
 
-    nodes.extend(get_loaded_nodes_from_manifest(manifest, &sys.executable, cwd)?);
+    nodes.extend(get_loaded_nodes_from_manifest(
+        manifest,
+        &sys.executable,
+        cwd,
+        &manifest.env.dyld_library_path,
+    )?);
 
     let py_path_comps = get_python_path_mapping(
         &site_pkg_by_alias,
@@ -163,20 +185,21 @@ fn get_loaded_nodes_from_manifest(
     manifest: &YarpManifest,
     executable_path: &PathBuf,
     cwd: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
 ) -> Result<Vec<Node>> {
     let mut res = Vec::new();
     for p in &manifest.loads {
         res.push(Node::new(
             p.path.clone(),
             Pkg::BinaryInLDPath,
-            Deps::new_binary(&p.path, executable_path, cwd)?,
+            Deps::new_binary(&p.path, executable_path, cwd, dyld_library_path)?,
         ))
     }
     for p in &manifest.modules.extensions {
         res.push(Node::new(
             p.path.clone(),
             Pkg::BinaryInLDPath,
-            Deps::new_binary(&p.path, executable_path, cwd)?,
+            Deps::new_binary(&p.path, executable_path, cwd, dyld_library_path)?,
         ))
     }
 
@@ -191,12 +214,16 @@ fn create_site_pkgs_alias(site_pkgs: &Vec<PathBuf>) -> HashMap<PathBuf, String> 
     site_pkg_aliases
 }
 
-fn get_executable_node(executable_path: &PathBuf, cwd: &PathBuf) -> Result<Node> {
+fn get_executable_node(
+    executable_path: &PathBuf,
+    cwd: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
+) -> Result<Node> {
     let p = executable_path.clone();
     Ok(Node::new(
         p,
         Pkg::Executable,
-        Deps::new_binary(executable_path, executable_path, cwd)?,
+        Deps::new_binary(executable_path, executable_path, cwd, dyld_library_path)?,
     ))
 }
 
@@ -205,6 +232,7 @@ fn get_nodes_recursive<F>(
     version: &Version,
     executable_path: &PathBuf,
     cwd: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
     alias: &String,
     callback: F,
 ) -> Result<Vec<Node>>
@@ -218,11 +246,10 @@ where
         );
     }
     let paths = get_paths_recursive_from_dir(directory)?;
-    // let alias = random_string();
     let mut nodes = Vec::with_capacity(paths.len());
     for p in paths {
         let pkg = callback(&p, directory, alias, version)?;
-        let deps = Deps::from_path(&p, executable_path, cwd)?;
+        let deps = Deps::from_path(&p, executable_path, cwd, dyld_library_path)?;
         nodes.push(Node::new(p, pkg, deps));
     }
     Ok(nodes)

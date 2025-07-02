@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -15,6 +16,27 @@ pub struct Macho {
     // path to the lib
     pub path: PathBuf,
 }
+
+#[derive(Debug, Clone)]
+pub enum BinaryParseError {
+    UnsupportedArchitecture,
+    NotBinary,
+}
+
+impl fmt::Display for BinaryParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryParseError::UnsupportedArchitecture => {
+                write!(f, "Unsupported architecture")
+            },
+            BinaryParseError::NotBinary => {
+                write!(f, "Not a binary")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BinaryParseError {}
 
 #[derive(Debug, Clone)]
 pub enum Binary {

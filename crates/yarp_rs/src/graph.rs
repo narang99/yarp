@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::node::{deps::Deps, Node, Pkg};
+use crate::{manifest::Env, node::{deps::Deps, Node, Pkg}};
 
 #[derive(Debug)]
 pub struct FileGraph {
@@ -12,6 +12,7 @@ pub struct FileGraph {
     cwd: PathBuf,
     inner: Graph<(), ()>,
     idx_by_node: BiHashMap<NodeIndex, Node>,
+    env: Env,
 }
 
 impl Display for FileGraph {
@@ -38,12 +39,13 @@ impl Display for FileGraph {
 }
 
 impl FileGraph {
-    pub fn new(executable_path: PathBuf, cwd: PathBuf) -> Self {
+    pub fn new(executable_path: PathBuf, cwd: PathBuf, env: Env) -> Self {
         Self {
             inner: Graph::new(),
             idx_by_node: BiHashMap::new(),
             executable_path,
             cwd,
+            env,
         }
     }
 
@@ -91,7 +93,7 @@ impl FileGraph {
 
         for p in deps {
             let pkg = Pkg::from_path(&p);
-            let deps = Deps::from_path(&p, &self.executable_path, &self.cwd)?;
+            let deps = Deps::from_path(&p, &self.executable_path, &self.cwd, &self.env.dyld_library_path)?;
             let parent_node = Node::new(p.clone(), pkg, deps);
             let parent_idx = self
                 .add_tree(parent_node)
@@ -147,7 +149,7 @@ mod test {
     fn get_graph() -> FileGraph {
         let executable_path = PathBuf::from_str("/python").unwrap();
         let cwd = PathBuf::from_str(".").unwrap();
-        FileGraph::new(executable_path, cwd)
+        FileGraph::new(executable_path, cwd, Env {dyld_library_path: vec![]})
     }
 
     #[test]

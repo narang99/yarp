@@ -1,26 +1,44 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, bail};
 
 pub mod core;
 mod macho;
 
-
 // TODO: remove and move this, no need for two identifiers
 pub use core::Deps;
 
-use crate::node::deps::macho::get_deps_from_macho;
+use crate::node::deps::{core::BinaryParseError, macho::get_deps_from_macho};
 
 impl Deps {
-    pub fn new_binary(path: &PathBuf, executable_path: &PathBuf, cwd: &PathBuf) -> Result<Deps> {
-        let bin = Deps::new_macho_binary(path, executable_path, cwd)?;
-        Ok(Deps::Binary(bin))
+    pub fn new_binary(
+        path: &PathBuf,
+        executable_path: &PathBuf,
+        cwd: &PathBuf,
+        dyld_library_path: &Vec<PathBuf>,
+    ) -> Result<Deps> {
+        let bin = Deps::new_macho_binary(path, executable_path, cwd, dyld_library_path);
+        match bin {
+            Ok(bin) => Ok(Deps::Binary(bin)),
+            Err(e) => {
+                if let Some(parse_err) = e.downcast_ref::<BinaryParseError>() {
+                    match parse_err {
+                        BinaryParseError::UnsupportedArchitecture | BinaryParseError::NotBinary => {
+                            Ok(Deps::Plain)
+                        }
+                    }
+                } else {
+                    Err(e)
+                }
+            }
+        }
     }
 
     fn new_macho_binary(
         path: &PathBuf,
         executable_path: &PathBuf,
         cwd: &PathBuf,
+        dyld_library_path: &Vec<PathBuf>,
     ) -> Result<core::Binary> {
         match path.to_str() {
             None => {
@@ -30,7 +48,9 @@ impl Deps {
                 );
             }
             Some(p) => {
-                let parsed = macho::parse(p, executable_path, cwd)?;
+                // TODO: get this from function params
+                let known_libs = HashMap::new();
+                let parsed = macho::parse(p, executable_path, cwd, dyld_library_path, &known_libs)?;
                 Ok(core::Binary::Macho(parsed))
             }
         }
@@ -47,13 +67,23 @@ impl Deps {
         }
     }
 
-    pub fn from_path(path: &PathBuf, executable_path: &PathBuf, cwd: &PathBuf) -> Result<Deps> {
+    pub fn from_path(
+        path: &PathBuf,
+        executable_path: &PathBuf,
+        cwd: &PathBuf,
+        dyld_library_path: &Vec<PathBuf>,
+    ) -> Result<Deps> {
         let ext = path.extension();
         match ext {
             None => Ok(Deps::Plain),
             Some(ext) => {
                 if ext == "so" || ext == "dylib" {
-                    Ok(Deps::new_binary(path, executable_path, cwd)?)
+                    Ok(Deps::new_binary(
+                        path,
+                        executable_path,
+                        cwd,
+                        dyld_library_path,
+                    )?)
                 } else {
                     Ok(Deps::Plain)
                 }
@@ -79,8 +109,9 @@ mod test {
         let path =
             PathBuf::from("/Users/hariomnarang/miniconda3/envs/platform/lib/libpango-1.0.0.dylib");
         let executable_path = PathBuf::from("/Users/hariomnarang/miniconda3/bin/python");
+        let dyld_library_path = Vec::new();
         let cwd = PathBuf::from(".");
-        let dylib = Deps::new_binary(&path, &executable_path, &cwd).unwrap();
+        let dylib = Deps::new_binary(&path, &executable_path, &cwd, &dyld_library_path).unwrap();
         let dylib = dylib.find().unwrap();
         dbg!(dylib);
     }

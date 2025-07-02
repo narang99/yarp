@@ -52,6 +52,9 @@ pub mod pkg;
 fn main() {
     env_logger::init();
     let args: Vec<String> = std::env::args().collect();
+    // let p = PathBuf::from("@loader_path/../hello.so");
+    // p.file_name().map(|f| {println!("fileeeeeeeeeeeeee {}", f.display())});
+    
     let yarp_manifest_path = args
         .get(1)
         .expect("Expected a single argument, the path the yarp manifest");
@@ -59,8 +62,7 @@ fn main() {
         "Failed to read yarp manifest file {}",
         yarp_manifest_path
     ));
-    let manifest: YarpManifest =
-        serde_json::from_str(&manifest_contents).expect("Failed to parse yarp manifest as JSON");
+    let manifest = get_manifest(&manifest_contents);
     let cwd = env::current_dir().unwrap();
     let (graph, path_components) =
         build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
@@ -76,6 +78,12 @@ fn main() {
     move_all_nodes(&graph, &dist);
     write_bootstrap_script(&dist, &path_components, &manifest.python.sys.version)
         .expect("failed in writing bootstrap script");
+}
+
+fn get_manifest(manifest_contents: &str) -> Box<YarpManifest> {
+    let manifest: YarpManifest =
+        serde_json::from_str(manifest_contents).expect("Failed to parse yarp manifest as JSON");
+    Box::new(manifest)
 }
 
 fn move_all_nodes(graph: &FileGraph, dist: &PathBuf) {

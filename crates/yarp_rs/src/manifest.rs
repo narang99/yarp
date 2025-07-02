@@ -10,11 +10,17 @@ pub struct YarpManifest {
     pub loads: Vec<Load>,
     pub modules: Modules,
     pub python: Python,
+    pub env: Env,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
     pub path: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Env {
+    pub dyld_library_path: Vec<PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
