@@ -3,8 +3,9 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use log::{info, warn};
+use log::info;
 use rand::{Rng, rng};
+use rayon::current_thread_index;
 use walkdir::WalkDir;
 
 mod node_factory;
@@ -13,12 +14,13 @@ pub use site_pkgs_comp::PythonPathComponent;
 
 use crate::{
     gather::{
-        node_factory::{generate_node, CreateNode},
+        node_factory::{CreateNode, generate_node},
         site_pkgs_comp::get_python_path_mapping,
     },
     graph::FileGraph,
-    manifest::{Env, Sys, Version, YarpManifest},
-    node::{deps::Deps, Node},
+    manifest::{Env, Skip, Sys, Version, YarpManifest},
+    node::{Node, deps::Deps},
+    paths::{get_dyld_library_path, is_sys_lib},
 };
 
 pub fn build_graph_from_manifest(
@@ -52,15 +54,23 @@ fn build_graph(
     let mut g = FileGraph::new(executable_path, cwd, env);
     info!("Build graph: pass 1, begin");
     let mut failures = Vec::new();
+
     for node in &nodes {
         g.add_node(node.clone());
     }
+
+    let mut i = 0;
+    let total = nodes.len();
     for node in nodes {
         match g.add_tree(node.clone(), &known_libs) {
             Ok(_) => {}
             Err(_) => {
                 failures.push(node);
             }
+        }
+        i += 1;
+        if i % (total / 10) == 0 {
+            info!("graph: pass 1: {}/{} nodes", i, total);
         }
     }
     info!(
@@ -101,39 +111,19 @@ pub fn get_python_universe(
     Vec<PythonPathComponent>,
     HashMap<String, PathBuf>,
 )> {
+    let dyld_library_path = get_dyld_library_path(&manifest.env);
     Deps::from_path(
         &PathBuf::from(
             "/Users/hariomnarang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/lib/libtorch.dylib",
         ),
         &manifest.python.sys.executable,
         cwd,
-        &manifest.env.dyld_library_path,
+        &dyld_library_path,
         &HashMap::new(),
     )?;
-    panic!("hehe");
     info!("gather files: Pass 1, begin");
     let (create_nodes, py_comps) = get_create_node_payloads(manifest)?;
-    let mut res = Vec::new();
-    let mut failures = Vec::new();
-    let empty_known_libs = HashMap::new();
-    for payload in &create_nodes {
-        let node = generate_node(
-            payload,
-            &manifest.python.sys.executable,
-            cwd,
-            &manifest.env.dyld_library_path,
-            &empty_known_libs,
-        );
-        match node {
-            Ok(node) => {
-                res.push(node);
-            }
-            Err(e) => {
-                warn!("failed to generate node in first pass, error={:?}", e);
-                failures.push(payload);
-            }
-        }
-    }
+    let (mut res, failures) = mk_nodes_parallel(&create_nodes, manifest, cwd, &dyld_library_path);
 
     info!(
         "gather files: Pass 2, begin, number of nodes to pass again: {}",
@@ -142,10 +132,10 @@ pub fn get_python_universe(
     let mut known_libs = get_libs_scanned_in_nodes(&res)?;
     for payload in failures {
         let node = generate_node(
-            payload,
+            &payload,
             &manifest.python.sys.executable,
             cwd,
-            &manifest.env.dyld_library_path,
+            &dyld_library_path,
             &known_libs,
         )?;
         let (file_name, path) = get_lib_from_node(&node)?;
@@ -155,6 +145,72 @@ pub fn get_python_universe(
     }
     info!("gather files done");
     Ok((res, py_comps, known_libs))
+}
+
+fn mk_nodes_parallel(
+    create_nodes: &Vec<CreateNode>,
+    manifest: &YarpManifest,
+    cwd: &PathBuf,
+    dyld_library_path: &Vec<PathBuf>,
+) -> (Vec<Node>, Vec<CreateNode>) {
+    use rayon::prelude::*;
+
+    let empty_known_libs = HashMap::new();
+    let mut res = Vec::new();
+    let mut failures = Vec::new();
+
+    let num_threads = rayon::current_num_threads();
+    let chunk_size = (create_nodes.len() + num_threads - 1) / num_threads;
+    info!("gather: creating nodes, chunk_size={} threads={}", chunk_size, num_threads);
+
+    let results: Vec<(Vec<Node>, Vec<CreateNode>)> = create_nodes
+        .par_chunks(chunk_size)
+        .map(|chunk| {
+            let thread_idx = current_thread_index().unwrap_or(0);
+            let mut local_res = Vec::new();
+            let mut local_failures = Vec::new();
+            let mut i = 0;
+            let total = chunk.len();
+            for payload in chunk {
+                let node = generate_node(
+                    payload,
+                    &manifest.python.sys.executable,
+                    cwd,
+                    dyld_library_path,
+                    &empty_known_libs,
+                );
+                match node {
+                    Ok(node) => {
+                        local_res.push(node);
+                    }
+                    Err(_) => {
+                        local_failures.push(payload.clone());
+                    }
+                }
+                i += 1;
+                if i % (total / 10) == 0 {
+                    info!("thread: {} exported {}/{} files", thread_idx, i, total);
+                }
+            }
+            (local_res, local_failures)
+        })
+        .collect();
+
+    for (local_res, local_failures) in results {
+        res.extend(local_res);
+        failures.extend(local_failures);
+    }
+
+    (res, failures)
+}
+
+fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
+    for prefix in &skip.path_prefixes {
+        if path.starts_with(prefix) {
+            return true;
+        }
+    }
+    false
 }
 
 fn get_libs_scanned_in_nodes(nodes: &Vec<Node>) -> Result<HashMap<String, PathBuf>> {
@@ -197,6 +253,7 @@ fn get_create_node_payloads(
         &sys.version,
         &random_string(),
         CreateNodeToMake::ExecPrefix,
+        &manifest.skip,
     )?);
 
     let stdlib_path = get_stdlib_loc(sys);
@@ -205,16 +262,13 @@ fn get_create_node_payloads(
         &sys.version,
         &random_string(),
         CreateNodeToMake::Prefix,
+        &manifest.skip,
     )?);
 
     // do site-packages in the end
     let site_pkgs = get_site_pkgs_without_prefixes(&sys.path, &lib_dynload_path, &stdlib_path);
     let site_pkgs = only_top_level_site_pkgs(&site_pkgs, &lib_dynload_path, &stdlib_path);
     let site_pkg_by_alias = create_site_pkgs_alias(&site_pkgs);
-    info!(
-        "gathering files from site-packages: {:?} original={:?}",
-        site_pkgs, sys.path
-    );
 
     for site_pkg in &site_pkgs {
         if !site_pkg.exists() {
@@ -235,15 +289,27 @@ fn get_create_node_payloads(
             &sys.version,
             site_pkg_by_alias.get(site_pkg).expect(&format!("fatal: could not find alias for site-packages, site_pkg={:?} site-packages-map={:?}", site_pkg, site_pkg_by_alias)),
             CreateNodeToMake::SitePkg,
+            &manifest.skip,
         )?);
     }
     for p in &manifest.loads {
+        if should_skip(&p.path, &manifest.skip) {
+            continue;
+        }
         res.push(CreateNode::BinaryInLdPath {
             path: p.path.clone(),
+            symlinks: p.symlinks.clone(),
         });
     }
-    for p in &manifest.modules.extensions {
-        res.push(CreateNode::BinaryInLdPath {
+    for p in &manifest.libs {
+        if should_skip(&p.path, &manifest.skip) {
+            continue;
+        }
+        let is_sys_library = p.path.to_str().map_or(false, |p| is_sys_lib(p));
+        if is_sys_library {
+            continue;
+        }
+        res.push(CreateNode::Binary {
             path: p.path.clone(),
         });
     }
@@ -275,6 +341,7 @@ fn get_create_nodes_payload_recursive(
     version: &Version,
     alias: &String,
     to_make: CreateNodeToMake,
+    skip: &Skip,
 ) -> Result<Vec<CreateNode>> {
     if !directory.exists() {
         bail!(
@@ -285,6 +352,9 @@ fn get_create_nodes_payload_recursive(
     let paths = get_paths_recursive_from_dir(directory)?;
     let mut nodes = Vec::with_capacity(paths.len());
     for p in paths {
+        if should_skip(&p, skip) {
+            continue;
+        }
         let create_node = match to_make {
             CreateNodeToMake::Prefix => CreateNode::PrefixPkg {
                 original_prefix: directory.clone(),

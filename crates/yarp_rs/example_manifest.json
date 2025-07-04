@@ -27,5 +27,10 @@
             ],
             "executable": "/Users/hariomnarang/miniconda3/bin/python"
         }
+    },
+    "skip": {
+        "path_prefixes": [
+
+        ]
     }
 }

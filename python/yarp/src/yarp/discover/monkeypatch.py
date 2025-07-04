@@ -1,9 +1,6 @@
 
 import importlib
 
-from yarp.discover.types import Load
-
-
 def _get_element(mod, attrs):
     el = mod
     for attr in attrs:
@@ -22,13 +19,47 @@ def _monkey_patch(mod, attrs, add_lib_callback, args_to_path):
 
         def new_fn(*args, **kwargs):
             path = args_to_path(*args, **kwargs)
-            print("adding path path =", path, "args =", args, "kwargs =", kwargs)
-            add_lib_callback(Load(path=path))
-            return original_fn(*args, **kwargs)
+            result = original_fn(*args, **kwargs)
+            if not result or not path:
+                return result
+            print("adding path ", path)
+            add_lib_callback(path)
+            return result
 
         _set_element(mod, attrs, new_fn)
     except AttributeError as ex:
         print("failed in patching", mod, attrs, ex)
+
+
+# def get_resolved_symlinks(path):
+#     if not path:
+#         return []
+#     res = []
+#     from pathlib import Path
+#     p = Path(path)
+
+#     if p.exists() and p.is_symlink():
+#         res.append(p.name)
+
+#     paths = get_ctypes_search_paths(str(p))
+#     print("symlink search, trying ", paths)
+#     for p in paths:
+#         p = Path(p)
+#         if p.exists() and p.is_symlink():
+#             res.append(p.name)
+#     return res
+
+# def resolve_path(path):
+#     import os
+#     from pathlib import Path
+
+#     if not path:
+#         return path
+#     p = Path(path)
+#     if p.exists():
+#         return os.path.realpath(str(p))
+#     else:
+#         return path
 
 
 def try_monkey_patch(mod, attrs, add_lib_callback, args_to_path):
@@ -55,15 +86,3 @@ def kwarg_else_arg(var, i):
         return kw[var] if var in kw else a[i]
 
     return _f
-
-
-# def monkey_patch(add_lib_callback):
-#     _try_monkey_patch(
-#         "ctypes", ["cdll", "LoadLibrary"], add_lib_callback, _kw_var_else_a_i("name", 0)
-#     )
-#     _try_monkey_patch(
-#         "ctypes", ["CDLL", "__init__"], add_lib_callback, _kw_var_else_a_i("name", 1)
-#     )
-#     _try_monkey_patch(
-#         "cffi", ["api", "FFI", "dlopen"], add_lib_callback, _kw_var_else_a_i("name", 1)
-#     )

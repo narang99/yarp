@@ -6,13 +6,16 @@ use crate::{
     gather::build_graph_from_manifest,
     graph::FileGraph,
     manifest::YarpManifest,
+    paths::normalize_path,
     pkg::{bootstrap::write_bootstrap_script, move_to_dist},
 };
 
+pub mod digest;
 pub mod gather;
 pub mod graph;
 pub mod manifest;
 pub mod node;
+pub mod paths;
 pub mod pkg;
 
 /**
@@ -51,10 +54,12 @@ pub mod pkg;
 
 fn main() {
     env_logger::init();
-    let args: Vec<String> = std::env::args().collect();
-    // let p = PathBuf::from("@loader_path/../hello.so");
-    // p.file_name().map(|f| {println!("fileeeeeeeeeeeeee {}", f.display())});
 
+    export_files();
+}
+
+fn export_files() {
+    let args: Vec<String> = std::env::args().collect();
     let yarp_manifest_path = args
         .get(1)
         .expect("Expected a single argument, the path the yarp manifest");
@@ -81,8 +86,16 @@ fn main() {
 }
 
 fn get_manifest(manifest_contents: &str) -> Box<YarpManifest> {
-    let manifest: YarpManifest =
+    let mut manifest: YarpManifest =
         serde_json::from_str(manifest_contents).expect("Failed to parse yarp manifest as JSON");
+    manifest.python.sys.path = manifest
+        .python
+        .sys
+        .path
+        .iter()
+        .map(|p| normalize_path(p))
+        .collect();
+    // manifest.python.sys.path.push(manifest.python.sys.prefix.join("lib"));
     Box::new(manifest)
 }
 

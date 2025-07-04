@@ -1,13 +1,13 @@
 use std::{
+    ffi::OsStr,
     fmt::Display,
     hash::{Hash, Hasher},
     path::PathBuf,
 };
 
-use crate::{
-    manifest::Version,
-    node::deps::Deps,
-};
+use anyhow::Result;
+
+use crate::{digest::sha256sum, manifest::Version, node::deps::Deps};
 
 pub mod deps;
 
@@ -42,7 +42,7 @@ pub enum Pkg {
 
     Executable,
     Binary,
-    BinaryInLDPath,
+    BinaryInLDPath { symlinks: Vec<String> },
     Plain,
 }
 
@@ -73,6 +73,14 @@ pub struct Node {
     pub deps: Deps,
 
     pub pkg: Pkg,
+
+    pub sha: String,
+}
+
+impl Node {
+    pub fn name(&self) -> Option<&OsStr> {
+        self.path.file_name()
+    }
 }
 
 impl PartialEq for Node {
@@ -98,16 +106,24 @@ impl Display for Node {
 }
 
 impl Node {
-    pub fn new(path: PathBuf, pkg: Pkg, deps: Deps) -> Node {
-        Node { path, deps, pkg }
+    pub fn new(path: PathBuf, pkg: Pkg, deps: Deps) -> Result<Node> {
+        let sha = sha256sum(&path)?;
+        Ok(Node {
+            path,
+            deps,
+            pkg,
+            sha,
+        })
     }
 
     #[cfg(test)]
-    pub fn mock(path: PathBuf, deps: Vec<PathBuf>) -> Node {
-        Node {
+    pub fn mock(path: PathBuf, deps: Vec<PathBuf>) -> Result<Node> {
+        let sha = sha256sum(&path)?;
+        Ok(Node {
             path,
             deps: Deps::mock(deps),
             pkg: Pkg::Binary,
-        }
+            sha,
+        })
     }
 }

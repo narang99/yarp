@@ -2,49 +2,30 @@
 from dataclasses import dataclass
 from typing import Any
 
+@dataclass(frozen=True)
+class LocalLoad:
+    path: str
+
+
+@dataclass
+class LoadParams:
+    symlinks: set[str]
+
 
 @dataclass(frozen=True)
 class Load:
     path: str
+    symlinks: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"path": self.path, "symlinks": self.symlinks}
+
+@dataclass(frozen=True)
+class Lib:
+    path: str
     
     def to_dict(self) -> dict[str, Any]:
         return {"path": self.path}
-
-
-@dataclass(frozen=True)
-class Pure:
-    name: str
-    path: str
-    
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "path": self.path,
-        }
-
-
-@dataclass(frozen=True)
-class Extension:
-    name: str
-    path: str
-    
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "path": self.path,
-        }
-
-
-@dataclass(frozen=True)
-class Modules:
-    extensions: list[Extension]
-    pure: list[Pure]
-    
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "extensions": [ext.to_dict() for ext in self.extensions],
-            "pure": [pure.to_dict() for pure in self.pure]
-        }
 
 
 @dataclass(frozen=True)
@@ -90,14 +71,27 @@ class Python:
 
 
 @dataclass(frozen=True)
+class Skip:
+    path_prefixes: list[str]
+    
+    def to_dict(self) -> dict[str, Any]:
+        return {"path_prefixes": self.path_prefixes}
+
+
+
+@dataclass(frozen=True)
 class YarpDiscovery:
     loads: list[Load]
-    modules: Modules
+    libs: list[Lib]
     python: Python
+    skip: Skip
+    env: dict[str, str]
     
     def to_dict(self) -> dict[str, Any]:
         return {
             "loads": [load.to_dict() for load in self.loads],
-            "modules": self.modules.to_dict(),
-            "python": self.python.to_dict()
+            "libs": [lib.to_dict() for lib in self.libs],
+            "python": self.python.to_dict(),
+            "skip": self.skip.to_dict(),
+            "env": self.env,
         }

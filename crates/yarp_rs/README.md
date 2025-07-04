@@ -1,3 +1,19 @@
+# TODO
+- make qureapp work
+- better error when install_name_tool fails (this fails when the library is itself statically linked), need to see if this failure should even happen?
+  - currently, im ignoring a lib if it does not contain any load commands (outside of system library load commands)
+  - in this case, mostly we cover all statically linked cases
+- path handling is slightly confusing between strings and pathbufs in some places, fix that too
+- /Users/hariomnarang/Desktop/work/blog/linker/yarp/crates/yarp_rs/dist/reals/r/_weight_vector.cpython-39-darwin.so
+  - no space to change load commands in this file
+  - thankfully this is not extremely common out there
+  - the only option is to replicate the load commands structure inside the dist folder relative to what the file wants
+- im now getting ALL the loaded libraries in dyld_image_count
+  - now the problem is symlinks, if dyld found something using symlink, its going to add only the real path
+  - for each search which succeeded in dlopen, we need to add that search term to our symlink marker, thats the easiest way to do this
+    - the problem is me not getting the real path from the stupid dyld search, i need to use heuristics to make it work
+
+
 # Algorithm
 
 - we have sys.path, explicitly imported so libs, imported packages, sys.prefix, sys.exec_prefix

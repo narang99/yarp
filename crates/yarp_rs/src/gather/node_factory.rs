@@ -34,7 +34,11 @@ pub enum CreateNode {
     },
     BinaryInLdPath {
         path: PathBuf,
+        symlinks: Vec<String>,
     },
+    Binary {
+        path: PathBuf,
+    }
 }
 
 pub fn generate_node(
@@ -63,7 +67,7 @@ pub fn generate_node(
                 dyld_library_path,
                 known_libs,
             )?;
-            Ok(Node::new(path.clone(), Pkg::Executable, deps))
+            Node::new(path.clone(), Pkg::Executable, deps)
         }
         CreateNode::ExecPrefixPkg {
             path,
@@ -86,11 +90,16 @@ pub fn generate_node(
             version,
         } => get_site_packages_pkg(path, site_pkg_path, alias, version)
             .and_then(|pkg| make_node(pkg, path)),
-        CreateNode::BinaryInLdPath { path } => Ok(Node::new(
+        CreateNode::BinaryInLdPath { path, symlinks } => Node::new(
             path.clone(),
-            Pkg::BinaryInLDPath,
+            Pkg::BinaryInLDPath { symlinks: symlinks.clone() },
             Deps::new_binary(&path, executable_path, cwd, dyld_library_path, known_libs)?,
-        )),
+        ),
+        CreateNode::Binary { path } => Node::new(
+            path.clone(),
+            Pkg::Binary,
+            Deps::new_binary(&path, executable_path, cwd, dyld_library_path, known_libs)?,
+        ),
     }
 }
 
@@ -103,7 +112,7 @@ fn mk_node(
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
     let deps = Deps::from_path(p, executable_path, cwd, dyld_library_path, known_libs)?;
-    Ok(Node::new(p.clone(), pkg, deps))
+    Node::new(p.clone(), pkg, deps)
 }
 
 fn get_exec_prefix_pkg(

@@ -8,7 +8,10 @@
 		},
 		{
 			"path": "crates/yarp_rs"
-		}
+		},
+    {
+      "path": "docs",
+    }
 	],
 	"settings": {
 		"cSpell.words": [
@@ -18,10 +21,12 @@
 			"dlopen",
 			"dyld",
 			"dylib",
+			"dylibs",
 			"dynload",
 			"ftypes",
 			"hariomnarang",
 			"libdep",
+			"libdyld",
 			"libpango",
 			"libtest",
 			"pathdiff",

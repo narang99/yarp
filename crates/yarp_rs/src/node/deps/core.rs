@@ -15,6 +15,9 @@ pub struct Macho {
 
     // path to the lib
     pub path: PathBuf,
+
+    // all rpaths, unresolved, raw rpaths
+    pub all_rpaths: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

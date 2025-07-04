@@ -7,6 +7,7 @@ use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, vis
 use crate::{
     manifest::Env,
     node::{Node, Pkg, deps::Deps},
+    paths::get_dyld_library_path,
 };
 
 #[derive(Debug)]
@@ -14,26 +15,27 @@ pub struct FileGraph {
     executable_path: PathBuf,
     cwd: PathBuf,
     inner: Graph<(), ()>,
-    idx_by_node: BiHashMap<NodeIndex, Node>,
+    idx_by_path: BiHashMap<NodeIndex, PathBuf>,
+    path_by_node: HashMap<PathBuf, Node>,
     env: Env,
 }
 
 impl Display for FileGraph {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for node_idx in self.inner.node_indices() {
-            let node = self
-                .idx_by_node
+            let path = self
+                .idx_by_path
                 .get_by_left(&node_idx)
                 .expect("corrupted graph state");
-            write!(f, "{} -> ", node)?;
+            write!(f, "{} -> ", path.display())?;
 
             let mut neighbors = Vec::new();
             for neighbor_idx in self.inner.neighbors(node_idx) {
                 let neighbor = self
-                    .idx_by_node
+                    .idx_by_path
                     .get_by_left(&neighbor_idx)
                     .expect("corrupted graph state");
-                neighbors.push(format!("{}", neighbor));
+                neighbors.push(format!("{}", neighbor.display()));
             }
             writeln!(f, "[{}]", neighbors.join(", "))?;
         }
@@ -45,7 +47,8 @@ impl FileGraph {
     pub fn new(executable_path: PathBuf, cwd: PathBuf, env: Env) -> Self {
         Self {
             inner: Graph::new(),
-            idx_by_node: BiHashMap::new(),
+            idx_by_path: BiHashMap::new(),
+            path_by_node: HashMap::new(),
             executable_path,
             cwd,
             env,
@@ -60,19 +63,24 @@ impl FileGraph {
     /// No dependency analysis or edge making is done
     /// use `add_tree` for that
     pub fn add_node(&mut self, node: Node) -> NodeIndex {
-        let idx = self.idx_by_node.get_by_right(&node);
+        let idx = self.idx_by_path.get_by_right(&node.path);
         match idx {
             Some(idx) => *idx,
             None => {
                 let idx = self.inner.add_node(());
-                self.idx_by_node.insert(idx, node);
+                self.raw_add_node(idx, node);
                 idx
             }
         }
     }
 
+    fn raw_add_node(&mut self, idx: NodeIndex, node: Node) {
+        self.idx_by_path.insert(idx, node.path.clone());
+        self.path_by_node.insert(node.path.clone(), node);
+    }
+
     pub fn iter_nodes(&self) -> impl Iterator<Item = &Node> {
-        self.idx_by_node.right_values()
+        self.path_by_node.values()
     }
 
     /// Take a node, and recursively add its dependencies to the graph
@@ -80,35 +88,48 @@ impl FileGraph {
     /// If the node is already present in the graph, this node is not inserted
     /// And the currently present node is used for all functions
     /// Else we insert the node
-    pub fn add_tree(&mut self, node: Node, known_libs: &HashMap<String, PathBuf>) -> Result<NodeIndex> {
-        let idx = match self.idx_by_node.get_by_right(&node) {
-            Some(idx) => *idx,
-            None => {
-                let idx = self.inner.add_node(());
-                self.idx_by_node.insert(idx, node.clone());
-                idx
-            }
-        };
-        let node = self.idx_by_node.get_by_left(&idx).expect(&format!(
-            "fatal: expected node to be present for idx={:?}",
-            idx
-        ));
+    pub fn add_tree(
+        &mut self,
+        node: Node,
+        known_libs: &HashMap<String, PathBuf>,
+    ) -> Result<NodeIndex> {
+        let path = node.path.clone();
+        let idx = self.add_node(node);
+        let node = self
+            .path_by_node
+            .get(&path)
+            .with_context(|| {
+                anyhow!(
+                    "fatal: expected node to be present for path={}",
+                    path.display()
+                )
+            })
+            .unwrap();
 
         let deps = node.deps.find()?;
 
         for p in deps {
-            let pkg = Pkg::from_path(&p);
-            let deps = Deps::from_path(
-                &p,
-                &self.executable_path,
-                &self.cwd,
-                &self.env.dyld_library_path,
-                &known_libs,
-            )?;
-            let parent_node = Node::new(p.clone(), pkg, deps);
-            let parent_idx = self
-                .add_tree(parent_node, known_libs)
-                .context(anyhow!("file: {}", p.display()))?;
+            let parent_idx = match self.idx_by_path.get_by_right(&p) {
+                Some(idx) => {
+                    *idx
+                },
+                None => {
+                    // no parent found, recursive create it and add its tree
+                    let pkg = Pkg::from_path(&p);
+                    let deps = Deps::from_path(
+                        &p,
+                        &self.executable_path,
+                        &self.cwd,
+                        &get_dyld_library_path(&self.env),
+                        &known_libs,
+                    )?;
+                    let parent_node = Node::new(p.clone(), pkg, deps)?;
+                    let parent_idx = self
+                        .add_tree(parent_node, known_libs)
+                        .context(anyhow!("file: {}", p.display()))?;
+                    parent_idx
+                },
+            };
             self.inner.add_edge(parent_idx, idx, ());
         }
 
@@ -121,18 +142,22 @@ impl FileGraph {
             .context("dependency analysis failed")?;
 
         Ok(node_indices.into_iter().map(|idx| {
-            // clones are safe due to Rc
-            self.idx_by_node
+            self.idx_by_path
                 .get_by_left(&idx)
                 .expect(&format!("fatal: failure in topological sort, found an index which we could not find in our registry: index={:?}", idx))
+                .clone()
+        }).map(|path| {
+            self.path_by_node
+                .get(&path)
+                .expect(&format!("fatal: failure in topological sort, found a path which we could not find in our registry: path={:?}", path))
                 .clone()
         }))
     }
 
     pub fn get_node_dependencies(&self, node: &Node) -> Vec<Node> {
         // given a node, return all the dependencies of the node
-        self.idx_by_node
-            .get_by_right(node)
+        self.idx_by_path
+            .get_by_right(&node.path)
             .map(|idx| {
                 self.inner
                     .edges_directed(*idx, Incoming)
@@ -143,11 +168,15 @@ impl FileGraph {
     }
 
     fn get_node_by_index_or_panic(&self, idx: NodeIndex) -> Node {
-        self.idx_by_node
-            .get_by_left(&idx)
+        let path = self.idx_by_path.get_by_left(&idx).expect(&format!(
+            "corrupted graph state: could not find path for idx in edge, idx={:?}",
+            idx
+        ));
+        self.path_by_node
+            .get(path)
             .expect(&format!(
-                "corrupted graph state: could not find node for idx in edge, idx={:?}",
-                idx
+                "corrupted graph state: could not find node for path in edge, path={:}",
+                path.display()
             ))
             .clone()
     }
@@ -163,46 +192,41 @@ mod test {
     fn get_graph() -> FileGraph {
         let executable_path = PathBuf::from_str("/python").unwrap();
         let cwd = PathBuf::from_str(".").unwrap();
-        FileGraph::new(
-            executable_path,
-            cwd,
-            Env {
-                dyld_library_path: vec![],
-            },
-        )
+        FileGraph::new(executable_path, cwd, HashMap::new())
     }
 
     #[test]
     fn test_add_node_single() {
         let mut graph = get_graph();
-        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]);
+        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]).unwrap();
         let idx = graph.add_tree(node, &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
-        assert!(graph.idx_by_node.contains_left(&idx));
+        assert!(graph.idx_by_path.contains_left(&idx));
     }
 
     #[test]
     fn test_add_node_with_dependencies() {
         let mut graph = get_graph();
 
-        let lib_test = Node::mock(PathBuf::from_str("/libtest").unwrap(), vec![]);
+        let lib_test = Node::mock(PathBuf::from_str("/libtest").unwrap(), vec![]).unwrap();
         let py_node = Node::mock(
             PathBuf::from_str("/python").unwrap(),
             vec![PathBuf::from_str("/libtest").unwrap()],
-        );
+        )
+        .unwrap();
 
         graph.add_tree(py_node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 2);
         assert_eq!(graph.inner.edge_count(), 1);
-        assert!(graph.idx_by_node.contains_right(&lib_test));
-        assert!(graph.idx_by_node.contains_right(&py_node));
+        assert!(graph.idx_by_path.contains_right(&lib_test.path));
+        assert!(graph.idx_by_path.contains_right(&py_node.path));
     }
 
     #[test]
     fn test_add_duplicate_node() {
         let mut graph = get_graph();
 
-        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]);
+        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]).unwrap();
 
         graph.add_tree(node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
@@ -217,16 +241,16 @@ mod test {
         let mut graph = get_graph();
 
         let dep2_path = PathBuf::from_str("/path/to/dep2.py").unwrap();
-        let dep2 = Node::mock(dep2_path.clone(), vec![]);
+        let dep2 = Node::mock(dep2_path.clone(), vec![]).unwrap();
 
         let dep1_path = PathBuf::from_str("libdep1").unwrap();
-        let dep1 = Node::mock(dep1_path.clone(), vec![dep2_path.clone()]);
+        let dep1 = Node::mock(dep1_path.clone(), vec![dep2_path.clone()]).unwrap();
 
         let dep3_path = PathBuf::from_str("libdep3").unwrap();
-        let dep3 = Node::mock(dep3_path.clone(), vec![dep2_path.clone()]);
+        let dep3 = Node::mock(dep3_path.clone(), vec![dep2_path.clone()]).unwrap();
 
         let main_path = PathBuf::from_str("/python").unwrap();
-        let main = Node::mock(main_path, vec![dep1_path, dep3_path]);
+        let main = Node::mock(main_path, vec![dep1_path, dep3_path]).unwrap();
 
         graph.add_node(main.clone());
         graph.add_node(dep1.clone());
@@ -238,9 +262,9 @@ mod test {
         assert!(result.is_ok());
         assert_eq!(graph.inner.node_count(), 4);
         assert_eq!(graph.inner.edge_count(), 4);
-        assert!(graph.idx_by_node.contains_right(&main));
-        assert!(graph.idx_by_node.contains_right(&dep1));
-        assert!(graph.idx_by_node.contains_right(&dep2));
+        assert!(graph.idx_by_path.contains_right(&main.path));
+        assert!(graph.idx_by_path.contains_right(&dep1.path));
+        assert!(graph.idx_by_path.contains_right(&dep2.path));
 
         // Test topological sort
         let nodes: Vec<Node> = graph.toposort().unwrap().collect();

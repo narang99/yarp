@@ -38,7 +38,7 @@ impl ExportedFileTree for Pkg {
                 Some(prefix_path_in_dist(prefix_pkgs, dist))
             }
             Pkg::Plain => None,
-            Pkg::BinaryInLDPath => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
+            Pkg::BinaryInLDPath {symlinks: _} => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
             Pkg::Binary => None,
             Pkg::Executable => Some(dist.join("python").join("bin").join("python")),
         }
@@ -54,7 +54,7 @@ impl ExportedFileTree for Pkg {
 
             Pkg::SitePackagesBinary(_)
             | Pkg::Binary
-            | Pkg::BinaryInLDPath
+            | Pkg::BinaryInLDPath {symlinks: _}
             | Pkg::PrefixBinary(_)
             | Pkg::ExecPrefixBinary(_) => reals_path(path, dist),
         }
@@ -70,7 +70,7 @@ impl ExportedFileTree for Pkg {
             Pkg::SitePackagesBinary(_)
             | Pkg::Executable
             | Pkg::Binary
-            | Pkg::BinaryInLDPath
+            | Pkg::BinaryInLDPath {symlinks: _}
             | Pkg::ExecPrefixBinary(_)
             | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),
         }

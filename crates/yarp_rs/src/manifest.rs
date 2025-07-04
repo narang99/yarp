@@ -1,26 +1,38 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 /// the module defining types for deserializing yarp.json (or called yarp manifest)
 /// an example json is in this test module, code is duplicated between `python/yarp` and our crate
 /// both should always be synced
 use serde::{Deserialize, Serialize};
 
+pub type Env = HashMap<String, String>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct YarpManifest {
     pub loads: Vec<Load>,
-    pub modules: Modules,
+    pub libs: Vec<Lib>,
     pub python: Python,
     pub env: Env,
+    pub skip: Skip,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Load {
-    pub path: PathBuf,
+pub struct Skip {
+    pub path_prefixes: Vec<PathBuf>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Env {
-    pub dyld_library_path: Vec<PathBuf>,
+/// these are the ones which are dlopen-ed
+/// they would be kept in ld-library-path
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Load {
+    pub path: PathBuf,
+    pub symlinks: Vec<String>,
+}
+
+/// only dependent libraries, only kept in reals and their symlink farms are created, but not kept in path
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Lib {
+    pub path: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,12 +122,6 @@ mod test {
         assert_eq!(
             manifest.loads[0].path.to_str().unwrap(),
             "/users/hariomnarang/miniconda3/lib/libpango.so"
-        );
-
-        assert_eq!(manifest.modules.extensions.len(), 1);
-        assert_eq!(
-            manifest.modules.extensions[0].path.to_str().unwrap(),
-            "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so"
         );
 
         assert_eq!(

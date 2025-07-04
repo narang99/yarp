@@ -9,21 +9,20 @@ use crate::{
     node::Node,
     pkg::{
         export::{Export, mk_parent_dirs},
-        patch::{LibPatch},
+        patch::LibPatch,
         paths::ExportedFileTree,
     },
 };
 
+pub mod bootstrap;
 pub mod export;
 pub mod patch;
 pub mod paths;
-pub mod bootstrap;
 
 pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()> {
     // todo: python executable does not have a symlink farm, fix that
     // for that we need to also remove the hardcoding we have done for patching
     // deps are already exported, now we export node
-
 
     let real_path = mk_reals(node, dist).with_context(|| {
         format!(
@@ -75,8 +74,15 @@ fn mk_reals(node: &Node, dist: &PathBuf) -> Result<Option<PathBuf>> {
     node.pkg
         .reals(&node.path, dist)
         .map(|dest| -> Result<PathBuf> {
-            mk_parent_dirs(&dest)?;
-            fs::copy(&node.path, &dest)?;
+            mk_parent_dirs(&dest)
+                .with_context(|| anyhow!("failed in creating parent dirs for destination, dest={}", dest.display()))?;
+            if dest.exists() {
+                fs::remove_file(&dest).with_context(|| {
+                    anyhow!("failed in removing existing file at destination, dest={}", dest.display())
+                })?;
+            }
+            fs::copy(&node.path, &dest)
+                .with_context(|| anyhow!("failed in copying reals to destination, dest={}", dest.display()))?;
             Ok(dest)
         })
         .transpose()

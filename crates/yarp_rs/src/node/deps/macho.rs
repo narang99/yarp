@@ -3,12 +3,7 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    path::{Component, Path, PathBuf},
-    str::FromStr,
-};
+use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
 
 use anyhow::{Context, Error, Result, anyhow, bail};
 use lief::macho::{
@@ -18,7 +13,10 @@ use lief::macho::{
 };
 use log::{debug, warn};
 
-use crate::node::deps::core::{BinaryParseError, Macho};
+use crate::{
+    node::deps::core::{BinaryParseError, Macho},
+    paths::{is_sys_lib, normalize_path},
+};
 
 #[derive(Debug)]
 struct PathResolverCtx<'a> {
@@ -119,7 +117,7 @@ fn _parse_single_macho(
         ))?
         .to_path_buf();
 
-    let rpaths = get_rpaths(
+    let (rpaths, all_rpaths) = get_rpaths(
         &macho,
         ctx.executable_path,
         ctx.cwd,
@@ -145,6 +143,7 @@ fn _parse_single_macho(
             rpaths,
             id_dylib,
             path: buf.clone(),
+            all_rpaths,
         },
         macho.header().cpu_type(),
     ))
@@ -168,12 +167,14 @@ fn get_rpaths(
     cwd: &PathBuf,
     loader_path: &PathBuf,
     dyld_library_path: &Vec<PathBuf>,
-) -> Result<HashMap<String, PathBuf>> {
+) -> Result<(HashMap<String, PathBuf>, Vec<String>)> {
+    let mut all_rpaths = Vec::new();
     let mut rpaths = HashMap::new();
     for cmd in macho.commands() {
         match cmd {
             Commands::RPath(rpath) => {
                 let val = rpath.path();
+                all_rpaths.push(val.clone());
                 let p = resolve_rpath(&val, executable_path, cwd, loader_path, dyld_library_path)
                     .context(anyhow!("failed in resolving rpath={}", val))?;
                 if let Some(inner) = p {
@@ -183,7 +184,7 @@ fn get_rpaths(
             _ => {}
         };
     }
-    Ok(rpaths)
+    Ok((rpaths, all_rpaths))
 }
 
 fn get_load_commands(
@@ -200,15 +201,15 @@ fn get_load_commands(
                 LoadCommandTypes::IdDylib => id_dylib = Some(dylib.name()),
                 LoadCommandTypes::LoadDylib => {
                     let val = dylib.name();
-                    if is_load_cmd_path_sys_lib(&val) {
+                    if is_sys_lib(&val) {
                         debug!(
                             "skipping system library {} in macho parsing, dependency of {}",
                             val, macho_path
                         );
                         continue;
                     }
-                    let p =
-                        resolve_load_cmd_path_with_dyld_fallback(&val, ctx, known_libs).with_context(|| {
+                    let p = resolve_load_cmd_path_with_dyld_fallback(&val, ctx, known_libs)
+                        .with_context(|| {
                             format!("failed in resolving load command={} ctx={:?}", val, ctx)
                         })?;
                     match p {
@@ -236,11 +237,6 @@ fn get_load_commands(
         };
     }
     Ok((id_dylib, load_cmds))
-}
-
-fn is_load_cmd_path_sys_lib(load_cmd_path: &str) -> bool {
-    load_cmd_path.starts_with("/usr/lib/")
-        || load_cmd_path.starts_with("/System/Library/Frameworks/")
 }
 
 fn resolve_rpath(
@@ -271,7 +267,7 @@ fn resolve_rpath(
 fn resolve_load_cmd_path_with_dyld_fallback(
     load_cmd_path: &str,
     ctx: &PathResolverCtx,
-    known_libs: &HashMap<String, PathBuf>
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Option<PathBuf>> {
     let resolved = resolve_load_cmd_path(load_cmd_path, ctx)?;
     match resolved {
@@ -320,8 +316,9 @@ fn find_in_dirs(file_name: &OsStr, dirs: &Vec<PathBuf>) -> Result<Option<PathBuf
 /// if it does not find any path associated with the load command, we send an `Ok(None)`
 /// on every other kind of error, we send Err
 fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<Option<PathBuf>> {
-    if load_cmd_path.starts_with("@rpath/") {
-        let p = load_cmd_path.strip_prefix("@rpath/").expect(&format!(
+    let load_path = PathBuf::from(load_cmd_path);
+    if load_path.starts_with("@rpath") {
+        let p = load_path.strip_prefix("@rpath").expect(&format!(
             "fatal: load_cmd_path={} should start with @rpath/",
             load_cmd_path
         ));
@@ -332,8 +329,8 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
             }
         }
         return Ok(None);
-    } else if load_cmd_path.starts_with("@loader_path/") {
-        let p = load_cmd_path.strip_prefix("@loader_path/").expect(&format!(
+    } else if load_path.starts_with("@loader_path") {
+        let p = load_path.strip_prefix("@loader_path").expect(&format!(
             "fatal: load_cmd_path={} should start with @loader_path/",
             load_cmd_path
         ));
@@ -343,21 +340,19 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
         } else {
             return Ok(None);
         }
-    } else if load_cmd_path.starts_with("@executable_path/") {
-        let p = load_cmd_path
-            .strip_prefix("@executable_path/")
-            .expect(&format!(
-                "fatal: load_cmd_path={} should start with @executable_path/",
-                load_cmd_path
-            ));
+    } else if load_path.starts_with("@executable_path") {
+        let p = load_path.strip_prefix("@executable_path").expect(&format!(
+            "fatal: load_cmd_path={} should start with @executable_path/",
+            load_cmd_path
+        ));
         let resolved = ctx.shared_lib_ctx.executable_path.join(p);
         if resolved.exists() {
             return Ok(Some(resolved));
         } else {
             return Ok(None);
         }
-    } else if load_cmd_path.starts_with("/") {
-        let resolved = PathBuf::from(load_cmd_path);
+    } else if load_path.starts_with("/") {
+        let resolved = load_path;
         if resolved.exists() {
             return Ok(Some(resolved));
         } else {
@@ -371,34 +366,4 @@ fn resolve_load_cmd_path(load_cmd_path: &str, ctx: &PathResolverCtx) -> Result<O
             return Ok(None);
         }
     }
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    // copied from cargo
-    // https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61
-    // basically `canonicalize`, but does not require the path to exist
-    let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
-        components.next();
-        PathBuf::from(c.as_os_str())
-    } else {
-        PathBuf::new()
-    };
-
-    for component in components {
-        match component {
-            Component::Prefix(..) => unreachable!(),
-            Component::RootDir => {
-                ret.push(component.as_os_str());
-            }
-            Component::CurDir => {}
-            Component::ParentDir => {
-                ret.pop();
-            }
-            Component::Normal(c) => {
-                ret.push(c);
-            }
-        }
-    }
-    ret
 }

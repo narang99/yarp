@@ -4,6 +4,7 @@
 use std::{path::PathBuf, process::{Command, Stdio}};
 
 use anyhow::{Result, anyhow, bail};
+use log::info;
 use pathdiff::diff_paths;
 
 use crate::node::deps::{
@@ -34,18 +35,41 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
     // im assuming that symlink farm location is hardcoded here
     // TODO: make this less hardcoded, we should simply find the relative path of symlink farm from reals
     // rpaths etc should use that string instead of hardcoding everything
+
     match binary {
         Binary::Macho(mach) => {
-            for (rpath, _) in mach.rpaths.iter() {
+            if mach.load_cmds.len() == 0 {
+                info!("no load commands, path={}, skipping patching", reals_path.display());
+                return Ok(());
+            }
+            // the order of these operations are important
+            // for many dylibs, if you simply modify a load command, and if the size of the new load command is bigger than the older one
+            // install_name_tool will fail, saying that it cant fit more commands in it
+            // if you simply add a new rpath, this same error can occur
+            // so first we remove all rpaths to make space
+            // then we modify load commands
+            // and finally we add the new rpath
+            // generally our load_commands would be smaller than the older ones 
+            // because we simply use @rpath/libname, this is smaller than almost every other prefix based path system
+            // only libname as a relative path is generally smaller
+            // it is working well in practice
+
+            // TODO: create a fallback which would create symlink farms in every place the original dylib expects data to be in
+            // if this whole procedure fails (we can't fit at all), we have to simply make a structure that works with existing dylib
+            // the simple solution is to go through all load commands, find the directory where dyld will look for each load command, and make a symlink farm there
+            // absolute paths need to be handled separately though, same with relative paths that may go out of dist
+            // hopefully i won't have to do this 
+            // although i believe absolute paths should be easily replaceable by relative paths, a relative path is strictly smaller than the absolute path
+            // its almost impossible to make relative paths work though (our directory of calling the binary is not fixed, although the bootstrap script can do this for us)
+            // the first hope is to replace with rpaths, and then see what can be done
+            // in any case, the operation is basically a map on load commands at a top level (which changes them to smaller variants) given an rpath
+            for rpath  in &mach.all_rpaths {
                 rm_rpath(rpath, reals_path)?;
             }
             let lib_name = get_lib_name(reals_path)?;
-            if lib_name == "python" {
-                println!("patchingg python");
-            }
             let rpath = get_new_rpath(reals_path, symlink_farm_path)?;
-            add_rpath(&rpath, reals_path)?;
             modify_load_cmds(reals_path, symlink_farm_path, mach)?;
+            add_rpath(&rpath, reals_path)?;
             set_dylib_id(dylib_id(&lib_name), &reals_path)?;
             sign_dylib(&reals_path)?;
         }
@@ -141,8 +165,8 @@ fn add_rpath(rpath: &str, path: &PathBuf) -> Result<()> {
     } else {
         bail!(
             "failed in running install_name_tool to add rpath path={} rpath={} status={:?}",
-            rpath,
             path.display(),
+            rpath,
             status
         )
     }
