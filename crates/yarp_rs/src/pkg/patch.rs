@@ -4,7 +4,6 @@
 use std::{path::PathBuf, process::{Command, Stdio}};
 
 use anyhow::{Result, anyhow, bail};
-use log::info;
 use pathdiff::diff_paths;
 
 use crate::node::deps::{
@@ -39,7 +38,6 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
     match binary {
         Binary::Macho(mach) => {
             if mach.load_cmds.len() == 0 {
-                info!("no load commands, path={}, skipping patching", reals_path.display());
                 return Ok(());
             }
             // the order of these operations are important

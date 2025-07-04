@@ -72,7 +72,7 @@ pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()>
 
 fn mk_reals(node: &Node, dist: &PathBuf) -> Result<Option<PathBuf>> {
     node.pkg
-        .reals(&node.path, dist)
+        .reals(&node, dist)
         .map(|dest| -> Result<PathBuf> {
             mk_parent_dirs(&dest)
                 .with_context(|| anyhow!("failed in creating parent dirs for destination, dest={}", dest.display()))?;
@@ -93,18 +93,18 @@ fn mk_symlink_farm(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<Opti
     node.pkg.symlink_farm(&node.path, dist).map(|symlink_dir| -> Result<()> {
         fs::create_dir_all(&symlink_dir)?;
         for dep in deps {
-            let dep_reals_path = dep.pkg.reals(&dep.path, dist);
+            let dep_reals_path = dep.pkg.reals(&dep, dist);
             match dep_reals_path {
                 None => {},
-                Some(p) => {
-                    let file_name = p.file_name().ok_or_else(|| {
-                        anyhow!("could not find file_name for creating symlink for dependency, path={}", p.display())
+                Some(dep_reals_path) => {
+                    let file_name = dep.path.file_name().ok_or_else(|| {
+                        anyhow!("could not find file_name for creating symlink for dependency, path={}", dep_reals_path.display())
                     })?;
-                    let rel_path = diff_paths(&p, &symlink_dir).ok_or_else(|| {
+                    let rel_path = diff_paths(&dep_reals_path, &symlink_dir).ok_or_else(|| {
                         anyhow!(
                             "failed in finding relative path for creating symlink farm, symlink_dir={} path={}",
                             symlink_dir.display(),
-                            p.display()
+                            dep_reals_path.display()
                         )
                     })?;
                     let dest = symlink_dir.join(file_name);

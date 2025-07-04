@@ -12,6 +12,7 @@
   - now the problem is symlinks, if dyld found something using symlink, its going to add only the real path
   - for each search which succeeded in dlopen, we need to add that search term to our symlink marker, thats the easiest way to do this
     - the problem is me not getting the real path from the stupid dyld search, i need to use heuristics to make it work
+- parallelize moving to dist, basically parallelize toposort (its a linear implementation right now, petgraph does not give a work distributing implementation right now)
 
 
 # Algorithm

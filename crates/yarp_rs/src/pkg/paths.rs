@@ -11,7 +11,7 @@ use log::error;
 
 use crate::{
     manifest::Version,
-    node::{Pkg, PkgSitePackages, PrefixPackages},
+    node::{Node, Pkg, PkgSitePackages, PrefixPackages},
 };
 
 pub trait ExportedFileTree {
@@ -19,7 +19,7 @@ pub trait ExportedFileTree {
     fn destination(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf>;
 
     // reals location, if needed
-    fn reals(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf>;
+    fn reals(&self, path: &Node, dist: &PathBuf) -> Option<PathBuf>;
 
     // symlink farm location, if exists
     fn symlink_farm(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf>;
@@ -44,7 +44,7 @@ impl ExportedFileTree for Pkg {
         }
     }
 
-    fn reals(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
+    fn reals(&self, node: &Node, dist: &PathBuf) -> Option<PathBuf> {
         match self {
             Pkg::SitePackagesPlain(_)
             | Pkg::Plain
@@ -56,7 +56,7 @@ impl ExportedFileTree for Pkg {
             | Pkg::Binary
             | Pkg::BinaryInLDPath {symlinks: _}
             | Pkg::PrefixBinary(_)
-            | Pkg::ExecPrefixBinary(_) => reals_path(path, dist),
+            | Pkg::ExecPrefixBinary(_) => reals_path_for_sha(&node.sha, &node.path, dist),
         }
     }
 
@@ -109,10 +109,10 @@ pub fn stdlib_relative_path(version: &Version) -> PathBuf {
         .join(version.get_python_version())
 }
 
-fn reals_path(path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
+fn reals_path_for_sha(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
     loose_validate_path_is_file(path);
     let reals_dir = dist.join("reals").join("r");
-    path.file_name().map(|file_name| reals_dir.join(file_name))
+    Some(reals_dir.join(sha))
 }
 
 fn symlink_farm_path(path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {

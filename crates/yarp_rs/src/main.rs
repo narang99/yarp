@@ -54,8 +54,10 @@ pub mod pkg;
 
 fn main() {
     env_logger::init();
-
+    let start_time = std::time::Instant::now();
     export_files();
+    let duration = start_time.elapsed();
+    info!("Time to finish: {} seconds", duration.as_secs());
 }
 
 fn export_files() {

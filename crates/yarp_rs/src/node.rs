@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Result;
 
-use crate::{digest::sha256sum, manifest::Version, node::deps::Deps};
+use crate::{digest::make_digest, manifest::Version, node::deps::Deps};
 
 pub mod deps;
 
@@ -107,7 +107,7 @@ impl Display for Node {
 
 impl Node {
     pub fn new(path: PathBuf, pkg: Pkg, deps: Deps) -> Result<Node> {
-        let sha = sha256sum(&path)?;
+        let sha = make_digest(&path)?;
         Ok(Node {
             path,
             deps,
@@ -118,7 +118,7 @@ impl Node {
 
     #[cfg(test)]
     pub fn mock(path: PathBuf, deps: Vec<PathBuf>) -> Result<Node> {
-        let sha = sha256sum(&path)?;
+        let sha = make_digest(&path)?;
         Ok(Node {
             path,
             deps: Deps::mock(deps),

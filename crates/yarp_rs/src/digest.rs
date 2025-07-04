@@ -1,23 +1,26 @@
 use anyhow::Result;
-use sha2::{Digest, Sha256};
+use blake3::Hasher;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
 
-pub fn sha256sum(path: &PathBuf) -> Result<String> {
+fn blake3_hash_file(path: &PathBuf) -> Result<String> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
-    let mut hasher = Sha256::new();
+    let mut hasher = Hasher::new();
 
     let mut buffer = [0u8; 8192];
-    loop {
-        let count = reader.read(&mut buffer)?;
-        if count == 0 {
+    while let Ok(n) = reader.read(&mut buffer) {
+        if n == 0 {
             break;
         }
-        hasher.update(&buffer[..count]);
+        hasher.update(&buffer[..n]);
     }
 
-    let result = hasher.finalize();
-    Ok(format!("{:x}", result))
+    let hash = hasher.finalize();
+    Ok(hash.to_hex().to_string())
+}
+
+pub fn make_digest(path: &PathBuf) -> Result<String> {
+    blake3_hash_file(path)
 }
