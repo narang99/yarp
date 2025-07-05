@@ -38,7 +38,9 @@ impl ExportedFileTree for Pkg {
                 Some(prefix_path_in_dist(prefix_pkgs, dist))
             }
             Pkg::Plain => None,
-            Pkg::BinaryInLDPath {symlinks: _} => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
+            Pkg::BinaryInLDPath { symlinks: _ } => {
+                path.file_name().map(|p| dist.join("lib").join("l").join(p))
+            }
             Pkg::Binary => None,
             Pkg::Executable => Some(dist.join("python").join("bin").join("python")),
         }
@@ -54,7 +56,7 @@ impl ExportedFileTree for Pkg {
 
             Pkg::SitePackagesBinary(_)
             | Pkg::Binary
-            | Pkg::BinaryInLDPath {symlinks: _}
+            | Pkg::BinaryInLDPath { symlinks: _ }
             | Pkg::PrefixBinary(_)
             | Pkg::ExecPrefixBinary(_) => reals_path_for_sha(&node.sha, &node.path, dist),
         }
@@ -70,7 +72,7 @@ impl ExportedFileTree for Pkg {
             Pkg::SitePackagesBinary(_)
             | Pkg::Executable
             | Pkg::Binary
-            | Pkg::BinaryInLDPath {symlinks: _}
+            | Pkg::BinaryInLDPath { symlinks: _ }
             | Pkg::ExecPrefixBinary(_)
             | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),
         }
@@ -111,8 +113,19 @@ pub fn stdlib_relative_path(version: &Version) -> PathBuf {
 
 fn reals_path_for_sha(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
     loose_validate_path_is_file(path);
+    let fname = match path.extension() {
+        Some(ext) => format!(
+            "{}.{}",
+            sha,
+            ext.to_str().expect(&format!(
+                "failed in converting extension {} to string",
+                ext.display()
+            ))
+        ),
+        None => sha.to_string(),
+    };
     let reals_dir = dist.join("reals").join("r");
-    Some(reals_dir.join(sha))
+    Some(reals_dir.join(fname))
 }
 
 fn symlink_farm_path(path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {

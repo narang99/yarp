@@ -1,6 +1,8 @@
 {
   "env": {
-    "dyld_library_path": ["/opt/homebrew/opt/ffmpeg@4/lib"]
+    "dyld_library_path": [
+      "/opt/homebrew/opt/ffmpeg@4/lib"
+    ]
   },
   "loads": [
     {
@@ -34863,6 +34865,10 @@
       ],
       "executable": "/Users/hariomnarang/miniconda3/envs/platform/bin/python"
     }
+  },
+  "skip": {
+    "path_prefixes": [
+      "/Users/hariomnarang/miniconda3/envs/platform/lib/python3.9/site-packages/pygraphviz"
+    ]
   }
 }
-

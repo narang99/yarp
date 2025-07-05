@@ -31,37 +31,6 @@ def _monkey_patch(mod, attrs, add_lib_callback, args_to_path):
         print("failed in patching", mod, attrs, ex)
 
 
-# def get_resolved_symlinks(path):
-#     if not path:
-#         return []
-#     res = []
-#     from pathlib import Path
-#     p = Path(path)
-
-#     if p.exists() and p.is_symlink():
-#         res.append(p.name)
-
-#     paths = get_ctypes_search_paths(str(p))
-#     print("symlink search, trying ", paths)
-#     for p in paths:
-#         p = Path(p)
-#         if p.exists() and p.is_symlink():
-#             res.append(p.name)
-#     return res
-
-# def resolve_path(path):
-#     import os
-#     from pathlib import Path
-
-#     if not path:
-#         return path
-#     p = Path(path)
-#     if p.exists():
-#         return os.path.realpath(str(p))
-#     else:
-#         return path
-
-
 def try_monkey_patch(mod, attrs, add_lib_callback, args_to_path):
     try:
         mod_ = importlib.import_module(mod)

@@ -1,6 +1,5 @@
 from functools import partial
 import json
-import sys
 import os
 import atexit
 from typing import Optional

@@ -51,9 +51,7 @@ def _std_dlopen(
     loads: dict[LocalLoad, LoadParams],
     fd_lib: Callable[[str], Optional[str]],
 ) -> Optional[tuple[LocalLoad, LoadParams]]:
-    print("searching name", name)
     lib = fd_lib(name)
-    print("search done", lib)
     if not lib:
         print("could not find lib for", name)
         return None
