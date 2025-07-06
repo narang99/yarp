@@ -114,26 +114,6 @@ impl FileGraph {
                 .add_tree(parent_node, known_libs)
                 .context(anyhow!("file: {}", p.display()))?;
             self.inner.add_edge(parent_idx, idx, ());
-            // let parent_idx = match self.idx_by_path.get_by_right(&p) {
-            //     Some(idx) => *idx,
-            //     None => {
-            //         // no parent found, recursive create it and add its tree
-            //         let pkg = Pkg::from_path(&p);
-            //         let deps = Deps::from_path(
-            //             &p,
-            //             &self.executable_path,
-            //             &self.cwd,
-            //             &get_dyld_library_path(&self.env),
-            //             &known_libs,
-            //         )?;
-            //         let parent_node = Node::new(p.clone(), pkg, deps)?;
-            //         let parent_idx = self
-            //             .add_tree(parent_node, known_libs)
-            //             .context(anyhow!("file: {}", p.display()))?;
-            //         parent_idx
-            //     }
-            // };
-            // Only add the edge if it does not already exist
             if !self.inner.contains_edge(parent_idx, idx) {
                 self.inner.add_edge(parent_idx, idx, ());
             }
