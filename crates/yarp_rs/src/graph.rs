@@ -135,7 +135,7 @@ impl FileGraph {
                     path,
                     &self.executable_path,
                     &self.cwd,
-                    &get_dyld_library_path(&self.env),
+                    &self.env,
                     &known_libs,
                 )?;
                 Node::new(path.clone(), pkg, deps)

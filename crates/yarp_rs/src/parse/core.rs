@@ -25,14 +25,19 @@ pub struct Elf {
     // parsed and found libraries that the elf file needs, equivalent to load_commands
     pub dt_needed: HashMap<String, PathBuf>,
 
+    // all resolvable rpaths
     pub dt_rpaths: HashMap<String, PathBuf>,
 
+    // all resolvable runpaths
     pub dt_runpaths: HashMap<String, PathBuf>,
 
+    // path to lib
     pub path: PathBuf,
 
+    // all rpath entries (resolved and unresolved)
     pub all_dt_rpaths: Vec<String>,
 
+    // all runpath entries (resolved and unresolved)
     pub all_dt_runpaths: Vec<String>,
 }
 
@@ -56,3 +61,18 @@ impl fmt::Display for BinaryParseError {
 }
 
 impl std::error::Error for BinaryParseError {}
+
+#[derive(Debug, Clone)]
+pub enum Binary {
+    Macho(Macho),
+    Elf(Elf),
+}
+
+impl Binary {
+    pub fn dependencies(&self) -> Vec<PathBuf> {
+        match self {
+            Binary::Macho(macho) => macho.load_cmds.values().cloned().collect(),
+            Binary::Elf(elf) => elf.dt_needed.values().cloned().collect(),
+        }
+    }
+}

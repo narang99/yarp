@@ -4,10 +4,14 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
+use log::warn;
 
 use crate::manifest::Env;
-use std::{path::{Component, Path, PathBuf}, str::FromStr};
+use std::{
+    path::{Component, Path, PathBuf},
+    str::FromStr,
+};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     // copied from cargo
@@ -65,4 +69,32 @@ pub fn to_string_path(path: &Path) -> Result<String> {
 pub fn to_path_buf(path: &str) -> Result<PathBuf> {
     PathBuf::from_str(path)
         .with_context(|| anyhow!("failed in getting path from string path={}", path))
+}
+
+pub fn get_valid_paths(ps: &Vec<String>) -> Vec<PathBuf> {
+    let mut res = Vec::new();
+    for p in ps {
+        let path = PathBuf::from_str(p);
+        match path {
+            Ok(path) => {
+                if path.exists() && path.is_dir() {
+                    res.push(path);
+                }
+            }
+            Err(e) => {
+                warn!("path parse failure: {p}: {e}");
+            }
+        }
+    }
+    res
+}
+
+pub fn split_colon_separated_into_valid_search_paths(term: Option<&String>) -> Vec<PathBuf> {
+    match term {
+        None => Vec::new(),
+        Some(term) => {
+            let paths: Vec<String> = term.split(":").map(|s| s.to_string()).collect();
+            get_valid_paths(&paths)
+        }
+    }
 }

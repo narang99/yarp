@@ -1,10 +1,9 @@
 
-use crate::parse::Macho;
+#[cfg(test)]
+use std::path::PathBuf;
 
-#[derive(Debug, Clone)]
-pub enum Binary {
-    Macho(Macho),
-}
+use crate::parse::Macho;
+use crate::parse::Binary;
 
 #[derive(Debug, Clone)]
 pub enum Deps {

@@ -118,12 +118,12 @@ pub fn get_python_universe(
         ),
         &manifest.python.sys.executable,
         cwd,
-        &dyld_library_path,
+        &manifest.env,
         &HashMap::new(),
     )?;
     info!("gather files: Pass 1, begin");
     let (create_nodes, py_comps) = get_create_node_payloads(manifest)?;
-    let (mut res, failures) = mk_nodes_parallel(&create_nodes, manifest, cwd, &dyld_library_path);
+    let (mut res, failures) = mk_nodes_parallel(&create_nodes, manifest, cwd, &manifest.env);
 
     info!(
         "gather files: Pass 2, begin, number of nodes to pass again: {}",
@@ -135,7 +135,7 @@ pub fn get_python_universe(
             &payload,
             &manifest.python.sys.executable,
             cwd,
-            &dyld_library_path,
+            &manifest.env,
             &known_libs,
         )?;
         let (file_name, path) = get_lib_from_node(&node)?;
@@ -151,7 +151,7 @@ fn mk_nodes_parallel(
     create_nodes: &Vec<CreateNode>,
     manifest: &YarpManifest,
     cwd: &PathBuf,
-    dyld_library_path: &Vec<PathBuf>,
+    env: &HashMap<String, String>,
 ) -> (Vec<Node>, Vec<CreateNode>) {
     use rayon::prelude::*;
 
@@ -179,7 +179,7 @@ fn mk_nodes_parallel(
                     payload,
                     &manifest.python.sys.executable,
                     cwd,
-                    dyld_library_path,
+                    env,
                     &empty_known_libs,
                 );
                 match node {

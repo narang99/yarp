@@ -1,2 +1,2 @@
-mod linux;
+pub mod linux;
 mod macho;

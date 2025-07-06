@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Result, anyhow, bail};
 use pathdiff::diff_paths;
 
-use crate::node::deps::{Deps, core::Binary};
+use crate::{node::deps::Deps, parse::Binary};
 use crate::parse::Macho;
 
 pub trait LibPatch {
@@ -71,6 +71,9 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
             add_rpath(&rpath, reals_path)?;
             set_dylib_id(dylib_id(&lib_name), &reals_path)?;
             sign_dylib(&reals_path)?;
+        },
+        _ => {
+            panic!("only macho patching is supported");
         }
     };
     Ok(())

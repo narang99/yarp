@@ -7,13 +7,13 @@ use std::{collections::HashMap, ffi::OsStr, path::PathBuf, str::FromStr};
 
 use anyhow::{Context, Error, Result, anyhow, bail};
 use lief::macho::{
-    Binary, Commands,
+    Binary, Commands, FatBinary,
     commands::{Command, LoadCommandTypes},
     header::CpuType,
 };
 use log::{debug, warn};
 
-use crate::paths::{is_sys_lib, normalize_path};
+use crate::paths::{is_sys_lib, normalize_path, split_colon_separated_into_valid_search_paths};
 
 use crate::parse::core::{BinaryParseError, Macho};
 
@@ -44,44 +44,30 @@ pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
 /// First is an actual path, denoted by Path/PathBuf
 /// Second is a string path that needs resolution
 pub fn parse(
-    macho_path: &str,
+    macho: FatBinary,
+    macho_path: &PathBuf,
     executable_path: &PathBuf,
     cwd: &PathBuf,
-    dyld_library_path: &Vec<PathBuf>,
+    env: &HashMap<String, String>,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Macho> {
+    let dyld_library_path =
+        &split_colon_separated_into_valid_search_paths(env.get("DYLD_LIBRARY_PATH"));
     let ctx = SharedLibCtx {
         executable_path,
         cwd,
         dyld_library_path,
     };
-    _parse(macho_path, &ctx, known_libs)
-        .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path, ctx))
+    _parse(macho, macho_path, &ctx, known_libs)
+        .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path.display(), ctx))
 }
 
 fn _parse(
-    macho_path: &str,
+    fat: FatBinary,
+    macho_path: &PathBuf,
     ctx: &SharedLibCtx,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Macho> {
-    let buf = PathBuf::from(macho_path);
-    if !buf.exists() {
-        bail!(
-            "failed in resolving dependency, it does not exist, path={}",
-            macho_path
-        );
-    }
-    let maybe_fat = lief::macho::parse(macho_path);
-    let fat = match maybe_fat {
-        Some(fat) => fat,
-        None => {
-            warn!(
-                "tried parsing {} as a binary, but its not a binary, will move and use it as a plain file",
-                macho_path
-            );
-            return Err(Error::new(BinaryParseError::NotBinary));
-        }
-    };
     let host_cpu_type = get_host_cpu_type()?;
 
     for macho in fat.iter() {
@@ -89,30 +75,29 @@ fn _parse(
         // this is extra work, we could just check the host header first, and if its not of our arch, move on
         // only problem is, if I'm calling `header()` before `load_commands()` for binaries, its randomly segfaulting
         // if we call `header()` later, it does not happen
-        let (parsed, cpu_type) = _parse_single_macho(&buf, macho_path, macho, ctx, known_libs)?;
+        let (parsed, cpu_type) = _parse_single_macho(&macho_path, macho, ctx, known_libs)?;
         if cpu_type == host_cpu_type {
             return Ok(parsed);
         }
     }
     warn!(
         "No binary found inside FAT Macho Binary for the host architecture, ignoring. path={} arch={:?}",
-        macho_path, host_cpu_type
+        macho_path.display(), host_cpu_type
     );
     return Err(Error::new(BinaryParseError::UnsupportedArchitecture));
 }
 
 fn _parse_single_macho(
-    buf: &PathBuf,
-    macho_path: &str,
+    macho_path: &PathBuf,
     macho: Binary,
     ctx: &SharedLibCtx,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<(Macho, CpuType)> {
-    let loader_path = buf
+    let loader_path = macho_path
         .parent()
         .ok_or(anyhow!(
             "fatal: could not find directory of path={}",
-            buf.display()
+            macho_path.display()
         ))?
         .to_path_buf();
 
@@ -132,7 +117,7 @@ fn _parse_single_macho(
     let (id_dylib, load_cmds) = get_load_commands(&macho, &macho_path, &resolver_ctx, known_libs)
         .context(anyhow!(
         "failed in parsing load commands for {}",
-        macho_path
+        macho_path.display()
     ))?;
 
     // NOTE: make sure to always call `header` in the end, if called before `load_commands`, we get random segfaults
@@ -141,7 +126,7 @@ fn _parse_single_macho(
             load_cmds,
             rpaths,
             id_dylib,
-            path: buf.clone(),
+            path: macho_path.clone(),
             all_rpaths,
         },
         macho.header().cpu_type(),
@@ -188,7 +173,7 @@ fn get_rpaths(
 
 fn get_load_commands(
     macho: &lief::macho::Binary,
-    macho_path: &str,
+    macho_path: &PathBuf,
     ctx: &PathResolverCtx,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<(Option<String>, HashMap<String, PathBuf>)> {
@@ -203,7 +188,7 @@ fn get_load_commands(
                     if is_sys_lib(&val) {
                         debug!(
                             "skipping system library {} in macho parsing, dependency of {}",
-                            val, macho_path
+                            val, macho_path.display()
                         );
                         continue;
                     }

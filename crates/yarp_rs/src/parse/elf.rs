@@ -1,26 +1,146 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
-use lief::elf::Binary;
+use anyhow::{Result, anyhow, bail};
+use lief::elf::{Binary, DynamicEntries};
+use log::warn;
 
+use crate::{parse::Elf, paths::split_colon_separated_into_valid_search_paths};
 
-// use crate::node::deps::core::Elf;
-
-pub fn parse_and_search(binary: Binary, cwd: &PathBuf, known_libs: &HashMap<String, PathBuf>) {
-
+pub fn parse(
+    binary: Binary,
+    object_path: &PathBuf,
+    cwd: &PathBuf,
+    env: &HashMap<String, String>,
+    extra_rpaths: &Vec<PathBuf>,
+) -> Result<(Elf, Vec<PathBuf>)> {
+    let ld_preload = split_colon_separated_into_valid_search_paths(env.get("LD_PRELOAD"));
+    let ld_library_path = split_colon_separated_into_valid_search_paths(env.get("LD_LIBRARY_PATH"));
+    do_parse(
+        binary,
+        object_path,
+        cwd,
+        &ld_preload,
+        &ld_library_path,
+        extra_rpaths,
+    )
 }
 
-// fn parse(
-//     binary: Binary,
-//     executable_path: &PathBuf,
-//     cwd: &PathBuf,
-//     ld_library_path: &Vec<PathBuf>,
-//     known_libs: &HashMap<String, PathBuf>,
-// ) -> Result<Elf> {
-//     let ctx = SharedLibCtx {
-//         executable_path,
-//         cwd,
-//         dyld_library_path,
-//     };
-//     _parse(macho_path, &ctx, known_libs)
-//         .with_context(|| anyhow!("failed in parsing macho={} context={:?}", macho_path, ctx))
-// }
+fn do_parse(
+    binary: Binary,
+    object_path: &PathBuf,
+    cwd: &PathBuf,
+    ld_preload: &Vec<PathBuf>,
+    ld_library_path: &Vec<PathBuf>,
+    extra_rpaths: &Vec<PathBuf>,
+) -> Result<(Elf, Vec<PathBuf>)> {
+    let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
+
+    let dt_rpaths = resolve_rpaths(&rpaths);
+    let dt_runpaths = resolve_rpaths(&runpaths);
+
+    let dt_rpath_bufs: Vec<PathBuf> = dt_rpaths.values().cloned().collect();
+    let dt_runpath_bufs: Vec<PathBuf> = dt_runpaths.values().cloned().collect();
+
+    let mut dt_needed: HashMap<String, PathBuf> = HashMap::new();
+
+    for lib in &libs_needed {
+        match crate::search::linux::search(
+            lib,
+            &dt_rpath_bufs,
+            extra_rpaths,
+            &dt_runpath_bufs,
+            &ld_preload,
+            &ld_library_path,
+            cwd,
+        ) {
+            None => {
+                bail!(
+                    "failed in finding dependency {} for library at path={}",
+                    lib,
+                    object_path.display()
+                );
+            }
+            Some(path) => {
+                dt_needed.insert(lib.to_string(), path);
+            }
+        }
+    }
+
+    let elf = Elf {
+        dt_needed,
+        dt_rpaths,
+        dt_runpaths,
+        path: object_path.clone(),
+        all_dt_rpaths: rpaths,
+        all_dt_runpaths: runpaths,
+    };
+
+    Ok((elf, dt_rpath_bufs))
+}
+
+fn resolve_rpaths(rpaths: &Vec<String>) -> HashMap<String, PathBuf> {
+    let mut res = HashMap::new();
+    for rpath in rpaths {
+        let path = PathBuf::from_str(rpath);
+        match path {
+            Ok(path) => {
+                if path.exists() && path.is_dir() {
+                    res.insert(rpath.clone(), path);
+                }
+            }
+            Err(e) => {
+                warn!("path parse failure: {rpath}: {e}");
+            }
+        }
+    }
+    res
+}
+
+fn get_dynamic_entries(
+    binary: &Binary,
+    object_path: &PathBuf,
+) -> Result<(Vec<String>, Vec<String>, Vec<String>, String)> {
+    let mut dt_needed = Vec::new();
+    let mut rpaths = Vec::new();
+    let mut runpaths = Vec::new();
+    let mut soname = None;
+
+    for entry in binary.dynamic_entries() {
+        match entry {
+            DynamicEntries::Library(e) => {
+                dt_needed.push(e.name());
+            }
+            DynamicEntries::Rpath(e) => {
+                rpaths.push(e.rpath());
+            }
+            DynamicEntries::RunPath(e) => {
+                runpaths.push(e.runpath());
+            }
+            DynamicEntries::SharedObject(e) => {
+                soname = Some(e.name());
+            }
+            _ => {}
+        }
+    }
+
+    let soname = match soname {
+        Some(soname) => soname,
+        None => {
+            let filename = object_path
+                .file_name()
+                .ok_or(anyhow!(
+                    "failed in getting filename of {}",
+                    object_path.display()
+                ))
+                .and_then(|f| {
+                    f.to_str().ok_or(anyhow!(
+                        "failed in converting filename to string, value={}",
+                        f.display()
+                    ))
+                })?;
+            filename.to_string()
+        }
+    };
+
+    Ok((rpaths, runpaths, dt_needed, soname))
+}

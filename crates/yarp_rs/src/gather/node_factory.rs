@@ -45,7 +45,7 @@ pub fn generate_node(
     payload: &CreateNode,
     executable_path: &PathBuf,
     cwd: &PathBuf,
-    dyld_library_path: &Vec<PathBuf>,
+    env: &HashMap<String, String>,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
     let make_node = |pkg, path| {
@@ -53,7 +53,7 @@ pub fn generate_node(
             path,
             executable_path,
             cwd,
-            dyld_library_path,
+            env,
             pkg,
             known_libs,
         )
@@ -64,7 +64,7 @@ pub fn generate_node(
                 executable_path,
                 executable_path,
                 cwd,
-                dyld_library_path,
+                env,
                 known_libs,
             )?;
             Node::new(path.clone(), Pkg::Executable, deps)
@@ -93,12 +93,12 @@ pub fn generate_node(
         CreateNode::BinaryInLdPath { path, symlinks } => Node::new(
             path.clone(),
             Pkg::BinaryInLDPath { symlinks: symlinks.clone() },
-            Deps::new_binary(&path, executable_path, cwd, dyld_library_path, known_libs)?,
+            Deps::new_binary(&path, executable_path, cwd, env, known_libs)?,
         ),
         CreateNode::Binary { path } => Node::new(
             path.clone(),
             Pkg::Binary,
-            Deps::new_binary(&path, executable_path, cwd, dyld_library_path, known_libs)?,
+            Deps::new_binary(&path, executable_path, cwd, env, known_libs)?,
         ),
     }
 }
@@ -107,11 +107,11 @@ fn mk_node(
     p: &PathBuf,
     executable_path: &PathBuf,
     cwd: &PathBuf,
-    dyld_library_path: &Vec<PathBuf>,
+    env: &HashMap<String, String>,
     pkg: Pkg,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
-    let deps = Deps::from_path(p, executable_path, cwd, dyld_library_path, known_libs)?;
+    let deps = Deps::from_path(p, executable_path, cwd, env, known_libs)?;
     Node::new(p.clone(), pkg, deps)
 }
 

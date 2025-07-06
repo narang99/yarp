@@ -7,7 +7,7 @@ pub mod core;
 // TODO: remove and move this, no need for two identifiers
 pub use core::Deps;
 
-use crate::parse::{BinaryParseError, get_deps_from_macho};
+use crate::parse::{BinaryParseError};
 // use crate::node::deps::{core::BinaryParseError, macho::get_deps_from_macho};
 
 impl Deps {
@@ -15,12 +15,12 @@ impl Deps {
         path: &PathBuf,
         executable_path: &PathBuf,
         cwd: &PathBuf,
-        dyld_library_path: &Vec<PathBuf>,
+        env: &HashMap<String, String>,
         known_libs: &HashMap<String, PathBuf>,
     ) -> Result<Deps> {
-        let bin = Deps::new_macho_binary(path, executable_path, cwd, dyld_library_path, known_libs);
+        let bin = crate::parse::parse_and_search(path, executable_path, cwd, env, known_libs, &Vec::new());
         match bin {
-            Ok(bin) => Ok(Deps::Binary(bin)),
+            Ok((bin, _)) => Ok(Deps::Binary(bin)),
             Err(e) => {
                 if let Some(parse_err) = e.downcast_ref::<BinaryParseError>() {
                     match parse_err {
@@ -35,33 +35,10 @@ impl Deps {
         }
     }
 
-    fn new_macho_binary(
-        path: &PathBuf,
-        executable_path: &PathBuf,
-        cwd: &PathBuf,
-        dyld_library_path: &Vec<PathBuf>,
-        known_libs: &HashMap<String, PathBuf>,
-    ) -> Result<core::Binary> {
-        match path.to_str() {
-            None => {
-                bail!(
-                    "failed in parsing macho binary, path could not be converted to string, path={}",
-                    path.display()
-                );
-            }
-            Some(p) => {
-                let parsed = crate::parse::parse_macho(p, executable_path, cwd, dyld_library_path, &known_libs)?;
-                Ok(core::Binary::Macho(parsed))
-            }
-        }
-    }
-
     pub fn find(&self) -> Result<Vec<PathBuf>> {
         match &self {
             Deps::Plain => Ok(Vec::new()),
-            Deps::Binary(binary) => match binary {
-                core::Binary::Macho(mach) => Ok(get_deps_from_macho(mach)),
-            },
+            Deps::Binary(binary) => Ok(binary.dependencies()),
             #[cfg(test)]
             Deps::Mock { paths } => Ok(paths.clone()),
         }
@@ -71,7 +48,7 @@ impl Deps {
         path: &PathBuf,
         executable_path: &PathBuf,
         cwd: &PathBuf,
-        dyld_library_path: &Vec<PathBuf>,
+        env: &HashMap<String, String>,
         known_libs: &HashMap<String, PathBuf>,
     ) -> Result<Deps> {
         let ext = path.extension();
@@ -83,7 +60,7 @@ impl Deps {
                         path,
                         executable_path,
                         cwd,
-                        dyld_library_path,
+                        env,
                         known_libs,
                     )?)
                 } else {
@@ -111,10 +88,10 @@ mod test {
         let path =
             PathBuf::from("/Users/hariomnarang/miniconda3/envs/platform/lib/libpango-1.0.0.dylib");
         let executable_path = PathBuf::from("/Users/hariomnarang/miniconda3/bin/python");
-        let dyld_library_path = Vec::new();
+        let env = HashMap::new();
         let known_libs = HashMap::new();
         let cwd = PathBuf::from(".");
-        let dylib = Deps::new_binary(&path, &executable_path, &cwd, &dyld_library_path, &known_libs).unwrap();
+        let dylib = Deps::new_binary(&path, &executable_path, &cwd, &env, &known_libs).unwrap();
         let dylib = dylib.find().unwrap();
         dbg!(dylib);
     }

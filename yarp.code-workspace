@@ -18,6 +18,7 @@
 			"abiflags",
 			"auxval",
 			"bimap",
+			"bufs",
 			"cpython",
 			"dlopen",
 			"dyld",
@@ -38,7 +39,9 @@
 			"pures",
 			"rpath",
 			"rpaths",
+			"runpath",
 			"runpaths",
+			"soname",
 			"toposort",
 			"Yarp"
 		]
