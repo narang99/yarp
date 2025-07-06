@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use log::warn;
 
-use crate::paths::{get_valid_paths, to_path_buf};
+use crate::paths::to_path_buf;
 
 macro_rules! try_find_in_dirs {
     ($name:expr, $dirs:expr) => {

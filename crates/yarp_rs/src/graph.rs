@@ -7,7 +7,6 @@ use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, vis
 use crate::{
     manifest::Env,
     node::{Node, Pkg, deps::Deps},
-    paths::get_dyld_library_path,
 };
 
 #[derive(Debug)]

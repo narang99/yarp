@@ -2,7 +2,6 @@
 #[cfg(test)]
 use std::path::PathBuf;
 
-use crate::parse::Macho;
 use crate::parse::Binary;
 
 #[derive(Debug, Clone)]
