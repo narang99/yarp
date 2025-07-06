@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, anyhow};
-use log::error;
 
 use crate::{
     parse::search::linux::auxval::get_at_platform,

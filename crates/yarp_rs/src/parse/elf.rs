@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, anyhow, bail};
 use lief::elf::{Binary, DynamicEntries};
