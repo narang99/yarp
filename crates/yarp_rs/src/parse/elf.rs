@@ -15,8 +15,11 @@ pub fn parse(
 ) -> Result<(Elf, Vec<PathBuf>)> {
     let ld_preload = split_colon_separated_into_valid_search_paths(env.get("LD_PRELOAD"));
     let ld_library_path = split_colon_separated_into_valid_search_paths(env.get("LD_LIBRARY_PATH"));
+    let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
     do_parse(
-        binary,
+        rpaths,
+        runpaths,
+        libs_needed,
         object_path,
         cwd,
         &ld_preload,
@@ -26,14 +29,18 @@ pub fn parse(
 }
 
 fn do_parse(
-    binary: Binary,
+    // binary: Binary,
+    // Ok((rpaths, runpaths, dt_needed, soname))
+    rpaths: Vec<String>,
+    runpaths: Vec<String>,
+    libs_needed: Vec<String>,
     object_path: &PathBuf,
     cwd: &PathBuf,
     ld_preload: &Vec<PathBuf>,
     ld_library_path: &Vec<PathBuf>,
     extra_rpaths: &Vec<PathBuf>,
 ) -> Result<(Elf, Vec<PathBuf>)> {
-    let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
+    // let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
 
     let dt_rpaths = resolve_rpaths(&rpaths);
     let dt_runpaths = resolve_rpaths(&runpaths);

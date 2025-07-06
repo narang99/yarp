@@ -73,7 +73,7 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
             sign_dylib(&reals_path)?;
         },
         _ => {
-            panic!("only macho patching is supported");
+            // TODO
         }
     };
     Ok(())

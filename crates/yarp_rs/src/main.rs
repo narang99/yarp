@@ -57,42 +57,10 @@ pub mod search;
 fn main() {
     env_logger::init();
 
-    // let pango = lief::elf::parse("/Users/hariomnarang/Desktop/work/blog/linker/yarp/crates/yarp_rs/libpango-1.0.so").unwrap();
-    // for entry in pango.dynamic_entries() {
-    //     dbg!(&entry, entry.tag(), entry.value());
-    //     match entry {
-    //         DynamicEntries::Library(e) =>  {
-    //             dbg!(e.name());
-    //         },
-    //         DynamicEntries::Generic(e) => {
-    //         },
-    //         DynamicEntries::Array(e) => {
-    //             dbg!(e.array()); 
-    //         },
-    //         DynamicEntries::Flags(e) => {
-    //             dbg!(e.flags());
-    //         },
-    //         DynamicEntries::Rpath(e) => {
-    //             dbg!(e.rpath());
-    //         },
-    //         DynamicEntries::RunPath(e) => {
-    //             dbg!(e.runpath());
-    //         },
-    //         DynamicEntries::SharedObject(e) => {
-    //             dbg!(e.name());
-    //         }
-    //     };
-    //     println!("\n\n");
-    //     // dbg!(entry);
-    // }
-    // dbg!(pango);
-
-    // crate::node::deps::elf::parse(PathBuf::from("/Users/hariomnarang/Desktop/work/blog/linker/yarp/crates/yarp_rs/libpango-1.0.so"), executable_path, cwd, known_libs, extra_search_paths)
-
-    // let start_time = std::time::Instant::now();
-    // export_files();
-    // let duration = start_time.elapsed();
-    // info!("Time to finish: {} seconds", duration.as_secs());
+    let start_time = std::time::Instant::now();
+    export_files();
+    let duration = start_time.elapsed();
+    info!("Time to finish: {} seconds", duration.as_secs());
 }
 
 fn export_files() {
