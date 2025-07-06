@@ -18,7 +18,7 @@ pub struct YarpManifest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Skip {
-    pub path_prefixes: Vec<PathBuf>,
+    pub prefixes: Vec<PathBuf>,
 }
 
 /// these are the ones which are dlopen-ed
@@ -32,16 +32,6 @@ pub struct Load {
 /// only dependent libraries, only kept in reals and their symlink farms are created, but not kept in path
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Lib {
-    pub path: PathBuf,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Modules {
-    pub extensions: Vec<Extension>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Extension {
     pub path: PathBuf,
 }
 
@@ -81,21 +71,18 @@ mod test {
 {
     "loads": [
         {
-            "path": "/users/hariomnarang/miniconda3/lib/libpango.so"
+            "path": "/users/hariomnarang/miniconda3/lib/libpango.so",
+            "symlinks": ["pango"]
         }
     ],
-    "modules": {
-        "pure": [
-            {
-                "name": "click",
-                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/click"
-            }
-        ],
-        "extensions": [
-            {
-                "name": "fontTools.varLib.iup",
-                "path": "/Users/hariomnarang/miniconda3/lib/python3.12/site-packages/fontTools/varLib/iup.cpython-312-darwin.so"
-            }
+    "libs": [
+        {
+            "path": "some-path"
+        }
+    ],
+    "skip": {
+        "prefixes": [
+            "/miniconda/pygraphviz"
         ]
     },
     "python": {
@@ -111,6 +98,9 @@ mod test {
             "path": ["/Users/hariomnarang/miniconda3/lib/python3.12/site-packages"],
             "executable": "/Users/hariomnarang/miniconda3/bin/python"
         }
+    },
+    "env": {
+        "PATH": "..."
     }
 }
 "#;

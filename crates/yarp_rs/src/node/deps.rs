@@ -4,6 +4,7 @@ use anyhow::{Result, bail};
 
 pub mod core;
 mod macho;
+pub mod elf;
 
 // TODO: remove and move this, no need for two identifiers
 pub use core::Deps;

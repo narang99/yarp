@@ -109,31 +109,58 @@ impl FileGraph {
         let deps = node.deps.find()?;
 
         for p in deps {
-            let parent_idx = match self.idx_by_path.get_by_right(&p) {
-                Some(idx) => {
-                    *idx
-                },
-                None => {
-                    // no parent found, recursive create it and add its tree
-                    let pkg = Pkg::from_path(&p);
-                    let deps = Deps::from_path(
-                        &p,
-                        &self.executable_path,
-                        &self.cwd,
-                        &get_dyld_library_path(&self.env),
-                        &known_libs,
-                    )?;
-                    let parent_node = Node::new(p.clone(), pkg, deps)?;
-                    let parent_idx = self
-                        .add_tree(parent_node, known_libs)
-                        .context(anyhow!("file: {}", p.display()))?;
-                    parent_idx
-                },
-            };
+            let parent_node = self.get_or_create_node(&p, known_libs)?;
+            let parent_idx = self
+                .add_tree(parent_node, known_libs)
+                .context(anyhow!("file: {}", p.display()))?;
             self.inner.add_edge(parent_idx, idx, ());
+            // let parent_idx = match self.idx_by_path.get_by_right(&p) {
+            //     Some(idx) => *idx,
+            //     None => {
+            //         // no parent found, recursive create it and add its tree
+            //         let pkg = Pkg::from_path(&p);
+            //         let deps = Deps::from_path(
+            //             &p,
+            //             &self.executable_path,
+            //             &self.cwd,
+            //             &get_dyld_library_path(&self.env),
+            //             &known_libs,
+            //         )?;
+            //         let parent_node = Node::new(p.clone(), pkg, deps)?;
+            //         let parent_idx = self
+            //             .add_tree(parent_node, known_libs)
+            //             .context(anyhow!("file: {}", p.display()))?;
+            //         parent_idx
+            //     }
+            // };
+            // Only add the edge if it does not already exist
+            if !self.inner.contains_edge(parent_idx, idx) {
+                self.inner.add_edge(parent_idx, idx, ());
+            }
         }
 
         Ok(idx)
+    }
+
+    fn get_or_create_node(
+        &self,
+        path: &PathBuf,
+        known_libs: &HashMap<String, PathBuf>,
+    ) -> Result<Node> {
+        match self.path_by_node.get(path) {
+            Some(node) => Ok(node.clone()),
+            None => {
+                let pkg = Pkg::from_path(path);
+                let deps = Deps::from_path(
+                    path,
+                    &self.executable_path,
+                    &self.cwd,
+                    &get_dyld_library_path(&self.env),
+                    &known_libs,
+                )?;
+                Node::new(path.clone(), pkg, deps)
+            }
+        }
     }
 
     pub fn toposort(&self) -> Result<impl Iterator<Item = Node>> {
@@ -187,18 +214,28 @@ mod test {
 
     use super::*;
 
-    use std::{path::PathBuf, str::FromStr};
+    use std::{
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
+
+    fn create_temp_dir() -> tempfile::TempDir {
+        tempfile::tempdir().expect("failed to create temp dir")
+    }
 
     fn get_graph() -> FileGraph {
-        let executable_path = PathBuf::from_str("/python").unwrap();
+        let tmp = create_temp_dir();
+        let executable_path = touch_path(&tmp, "python");
         let cwd = PathBuf::from_str(".").unwrap();
         FileGraph::new(executable_path, cwd, HashMap::new())
     }
 
     #[test]
     fn test_add_node_single() {
+        let tmp = create_temp_dir();
         let mut graph = get_graph();
-        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]).unwrap();
+        let path = touch_path(&tmp, "python");
+        let node = Node::mock(path, vec![]).unwrap();
         let idx = graph.add_tree(node, &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
         assert!(graph.idx_by_path.contains_left(&idx));
@@ -206,14 +243,13 @@ mod test {
 
     #[test]
     fn test_add_node_with_dependencies() {
+        let tmp = create_temp_dir();
         let mut graph = get_graph();
 
-        let lib_test = Node::mock(PathBuf::from_str("/libtest").unwrap(), vec![]).unwrap();
-        let py_node = Node::mock(
-            PathBuf::from_str("/python").unwrap(),
-            vec![PathBuf::from_str("/libtest").unwrap()],
-        )
-        .unwrap();
+        let p_lib_test = touch_path(&tmp, "libtest");
+        let p_python = touch_path(&tmp, "python");
+        let lib_test = Node::mock(p_lib_test.clone(), vec![]).unwrap();
+        let py_node = Node::mock(p_python, vec![p_lib_test]).unwrap();
 
         graph.add_tree(py_node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 2);
@@ -226,7 +262,9 @@ mod test {
     fn test_add_duplicate_node() {
         let mut graph = get_graph();
 
-        let node = Node::mock(PathBuf::from_str("/python").unwrap(), vec![]).unwrap();
+        let tmp = create_temp_dir();
+        let p_python = touch_path(&tmp, "python");
+        let node = Node::mock(p_python, vec![]).unwrap();
 
         graph.add_tree(node.clone(), &HashMap::new()).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
@@ -238,18 +276,20 @@ mod test {
     #[test]
     fn test_add_node_complex_dependencies() {
         println!("*************start complex test**********************");
+        let tmp = create_temp_dir();
+
         let mut graph = get_graph();
 
-        let dep2_path = PathBuf::from_str("/path/to/dep2.py").unwrap();
+        let dep2_path = touch_path(&tmp, "dep2.py");
         let dep2 = Node::mock(dep2_path.clone(), vec![]).unwrap();
 
-        let dep1_path = PathBuf::from_str("libdep1").unwrap();
+        let dep1_path = touch_path(&tmp, "libdep1");
         let dep1 = Node::mock(dep1_path.clone(), vec![dep2_path.clone()]).unwrap();
 
-        let dep3_path = PathBuf::from_str("libdep3").unwrap();
+        let dep3_path = touch_path(&tmp, "libdep3");
         let dep3 = Node::mock(dep3_path.clone(), vec![dep2_path.clone()]).unwrap();
 
-        let main_path = PathBuf::from_str("/python").unwrap();
+        let main_path = touch_path(&tmp, "python");
         let main = Node::mock(main_path, vec![dep1_path, dep3_path]).unwrap();
 
         graph.add_node(main.clone());
@@ -292,5 +332,11 @@ mod test {
             first,
             second
         );
+    }
+
+    fn touch_path(tmp: &tempfile::TempDir, name: &str) -> PathBuf {
+        let path = tmp.path().join(name);
+        std::fs::File::create(&path).expect("Failed to create file");
+        path
     }
 }

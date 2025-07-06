@@ -4,8 +4,10 @@
 // loader-path would be simply the current path
 // we also want executable-path as an input
 
+use anyhow::{anyhow, Context, Result};
+
 use crate::manifest::Env;
-use std::path::{Component, Path, PathBuf};
+use std::{path::{Component, Path, PathBuf}, str::FromStr};
 
 pub fn normalize_path(path: &Path) -> PathBuf {
     // copied from cargo
@@ -49,4 +51,18 @@ pub fn get_dyld_library_path(env: &Env) -> Vec<PathBuf> {
     } else {
         Vec::new()
     }
+}
+
+pub fn to_string_path(path: &Path) -> Result<String> {
+    path.to_str().map(|s| s.to_string()).with_context(|| {
+        anyhow!(
+            "failed in getting string representation of file path={}",
+            path.display()
+        )
+    })
+}
+
+pub fn to_path_buf(path: &str) -> Result<PathBuf> {
+    PathBuf::from_str(path)
+        .with_context(|| anyhow!("failed in getting path from string path={}", path))
 }

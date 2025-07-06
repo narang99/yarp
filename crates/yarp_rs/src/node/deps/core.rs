@@ -21,6 +21,22 @@ pub struct Macho {
 }
 
 #[derive(Debug, Clone)]
+pub struct Elf {
+    // parsed and found libraries that the elf file needs, equivalent to load_commands
+    pub dt_needed: HashMap<String, PathBuf>,
+
+    pub dt_rpaths: HashMap<String, PathBuf>,
+
+    pub dt_runpaths: HashMap<String, PathBuf>,
+
+    pub path: PathBuf,
+
+    pub all_dt_rpaths: Vec<String>,
+
+    pub all_dt_runpaths: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub enum BinaryParseError {
     UnsupportedArchitecture,
     NotBinary,

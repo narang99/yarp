@@ -161,7 +161,10 @@ fn mk_nodes_parallel(
 
     let num_threads = rayon::current_num_threads();
     let chunk_size = (create_nodes.len() + num_threads - 1) / num_threads;
-    info!("gather: creating nodes, chunk_size={} threads={}", chunk_size, num_threads);
+    info!(
+        "gather: creating nodes, chunk_size={} threads={}",
+        chunk_size, num_threads
+    );
 
     let results: Vec<(Vec<Node>, Vec<CreateNode>)> = create_nodes
         .par_chunks(chunk_size)
@@ -205,7 +208,7 @@ fn mk_nodes_parallel(
 }
 
 fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
-    for prefix in &skip.path_prefixes {
+    for prefix in &skip.prefixes {
         if path.starts_with(prefix) {
             return true;
         }
@@ -280,7 +283,7 @@ fn get_create_node_payloads(
             continue;
         }
         info!(
-            "gathering files from site-packages, site-package={} alias={:?}",
+            "gather: site-package={} alias={:?}",
             site_pkg.display(),
             site_pkg_by_alias.get(site_pkg)
         );

@@ -2164,6 +2164,7 @@ dependencies = [
  "bimap",
  "blake3",
  "env_logger",
+ "libc",
  "lief",
  "log",
  "pathdiff",
@@ -2172,6 +2173,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "tempfile",
  "walkdir",
 ]
 

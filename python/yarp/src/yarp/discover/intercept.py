@@ -84,7 +84,7 @@ def exit_handler(prefixes_to_skip: list[str]):
         ],
         libs=[Lib(path=lib) for lib in _get_all_loaded_libraries()],
         python=get_python_props(),
-        skip=Skip(path_prefixes=prefixes_to_skip),
+        skip=Skip(prefixes=prefixes_to_skip),
         env={str(k): str(v) for k, v in os.environ.items()},
     )
     with open(dump_loc, "w") as f:

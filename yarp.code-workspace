@@ -16,6 +16,7 @@
 	"settings": {
 		"cSpell.words": [
 			"abiflags",
+			"auxval",
 			"bimap",
 			"cpython",
 			"dlopen",
@@ -25,6 +26,8 @@
 			"dynload",
 			"ftypes",
 			"hariomnarang",
+			"ldconfig",
+			"libc",
 			"libdep",
 			"libdyld",
 			"libpango",
@@ -35,6 +38,7 @@
 			"pures",
 			"rpath",
 			"rpaths",
+			"runpaths",
 			"toposort",
 			"Yarp"
 		]

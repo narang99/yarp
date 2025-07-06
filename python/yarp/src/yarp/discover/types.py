@@ -72,10 +72,10 @@ class Python:
 
 @dataclass(frozen=True)
 class Skip:
-    path_prefixes: list[str]
+    prefixes: list[str]
     
     def to_dict(self) -> dict[str, Any]:
-        return {"path_prefixes": self.path_prefixes}
+        return {"prefixes": self.prefixes}
 
 
 
