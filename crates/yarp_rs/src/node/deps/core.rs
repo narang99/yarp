@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::fmt;
-use std::path::PathBuf;
 
 use crate::parse::Macho;
 

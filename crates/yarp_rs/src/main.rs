@@ -1,6 +1,5 @@
 use std::{env, path::PathBuf};
 
-use lief::elf::{dynamic::DynamicEntry, DynamicEntries};
 use log::info;
 
 use crate::{

@@ -195,7 +195,7 @@ mod test {
     use super::*;
 
     use std::{
-        path::{Path, PathBuf},
+        path::PathBuf,
         str::FromStr,
     };
 

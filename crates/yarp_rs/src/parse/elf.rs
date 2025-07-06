@@ -1,10 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::Result;
 use lief::elf::Binary;
 
 
-use crate::parse::core::Elf;
 // use crate::node::deps::core::Elf;
 
 pub fn parse_and_search(binary: Binary, cwd: &PathBuf, known_libs: &HashMap<String, PathBuf>) {
