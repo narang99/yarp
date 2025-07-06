@@ -3,13 +3,12 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Result, bail};
 
 pub mod core;
-mod macho;
-pub mod elf;
 
 // TODO: remove and move this, no need for two identifiers
 pub use core::Deps;
 
-use crate::node::deps::{core::BinaryParseError, macho::get_deps_from_macho};
+use crate::parse::{BinaryParseError, get_deps_from_macho};
+// use crate::node::deps::{core::BinaryParseError, macho::get_deps_from_macho};
 
 impl Deps {
     pub fn new_binary(
@@ -51,7 +50,7 @@ impl Deps {
                 );
             }
             Some(p) => {
-                let parsed = macho::parse(p, executable_path, cwd, dyld_library_path, &known_libs)?;
+                let parsed = crate::parse::parse_macho(p, executable_path, cwd, dyld_library_path, &known_libs)?;
                 Ok(core::Binary::Macho(parsed))
             }
         }

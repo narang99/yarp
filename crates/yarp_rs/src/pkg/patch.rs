@@ -1,15 +1,16 @@
 // patching libraries to work with the new symlink tree
 // basically all install_name_tool operations
 
-use std::{path::PathBuf, process::{Command, Stdio}};
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use anyhow::{Result, anyhow, bail};
 use pathdiff::diff_paths;
 
-use crate::node::deps::{
-    Deps,
-    core::{Binary, Macho},
-};
+use crate::node::deps::{Deps, core::Binary};
+use crate::parse::Macho;
 
 pub trait LibPatch {
     fn patch(&self, real_path: &PathBuf, symlink_farm_path: &PathBuf) -> Result<()>;
@@ -47,7 +48,7 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
             // so first we remove all rpaths to make space
             // then we modify load commands
             // and finally we add the new rpath
-            // generally our load_commands would be smaller than the older ones 
+            // generally our load_commands would be smaller than the older ones
             // because we simply use @rpath/libname, this is smaller than almost every other prefix based path system
             // only libname as a relative path is generally smaller
             // it is working well in practice
@@ -56,12 +57,12 @@ pub fn patch_lib(reals_path: &PathBuf, binary: &Binary, symlink_farm_path: &Path
             // if this whole procedure fails (we can't fit at all), we have to simply make a structure that works with existing dylib
             // the simple solution is to go through all load commands, find the directory where dyld will look for each load command, and make a symlink farm there
             // absolute paths need to be handled separately though, same with relative paths that may go out of dist
-            // hopefully i won't have to do this 
+            // hopefully i won't have to do this
             // although i believe absolute paths should be easily replaceable by relative paths, a relative path is strictly smaller than the absolute path
             // its almost impossible to make relative paths work though (our directory of calling the binary is not fixed, although the bootstrap script can do this for us)
             // the first hope is to replace with rpaths, and then see what can be done
             // in any case, the operation is basically a map on load commands at a top level (which changes them to smaller variants) given an rpath
-            for rpath  in &mach.all_rpaths {
+            for rpath in &mach.all_rpaths {
                 rm_rpath(rpath, reals_path)?;
             }
             let lib_name = get_lib_name(reals_path)?;
@@ -125,7 +126,10 @@ fn get_new_rpath(real_path: &PathBuf, symlink_farm: &PathBuf) -> Result<String> 
         )
     })?;
     let rel_path = rel_path.to_str().map(|s| s.to_string()).ok_or_else(|| {
-        anyhow!("failed in converting path to string for adding as rpath, path={}", rel_path.display())
+        anyhow!(
+            "failed in converting path to string for adding as rpath, path={}",
+            rel_path.display()
+        )
     })?;
     Ok(format!("@loader_path/{}/", rel_path))
 }

@@ -1,0 +1,58 @@
+use std::collections::HashMap;
+use std::fmt;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone)]
+pub struct Macho {
+    // all load commands, along with the resolved path of the dependency
+    pub load_cmds: HashMap<String, PathBuf>,
+
+    // all rpaths, along with resolved rpath
+    pub rpaths: HashMap<String, PathBuf>,
+
+    // the current id of the dylib
+    pub id_dylib: Option<String>,
+
+    // path to the lib
+    pub path: PathBuf,
+
+    // all rpaths, unresolved, raw rpaths
+    pub all_rpaths: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Elf {
+    // parsed and found libraries that the elf file needs, equivalent to load_commands
+    pub dt_needed: HashMap<String, PathBuf>,
+
+    pub dt_rpaths: HashMap<String, PathBuf>,
+
+    pub dt_runpaths: HashMap<String, PathBuf>,
+
+    pub path: PathBuf,
+
+    pub all_dt_rpaths: Vec<String>,
+
+    pub all_dt_runpaths: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum BinaryParseError {
+    UnsupportedArchitecture,
+    NotBinary,
+}
+
+impl fmt::Display for BinaryParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BinaryParseError::UnsupportedArchitecture => {
+                write!(f, "Unsupported architecture")
+            }
+            BinaryParseError::NotBinary => {
+                write!(f, "Not a binary")
+            }
+        }
+    }
+}
+
+impl std::error::Error for BinaryParseError {}
