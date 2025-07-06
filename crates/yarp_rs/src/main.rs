@@ -18,7 +18,6 @@ pub mod node;
 pub mod paths;
 pub mod pkg;
 pub mod parse;
-pub mod search;
 
 /**
  * Algorithm:

@@ -6,7 +6,8 @@ use std::path::PathBuf;
 
 use log::warn;
 
-use crate::paths::to_path_buf;
+use crate::{paths::to_path_buf};
+pub use crate::parse::search::linux::rpath::parse_rpath as parse_linux_rpath;
 
 macro_rules! try_find_in_dirs {
     ($name:expr, $dirs:expr) => {
@@ -14,10 +15,6 @@ macro_rules! try_find_in_dirs {
             return Some(p);
         }
     };
-}
-
-pub struct LinuxSearchResult {
-    pub path: PathBuf,
 }
 
 pub fn search(

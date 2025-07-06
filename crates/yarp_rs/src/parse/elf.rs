@@ -2,9 +2,8 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use anyhow::{Result, anyhow, bail};
 use lief::elf::{Binary, DynamicEntries};
-use log::warn;
 
-use crate::{parse::Elf, paths::split_colon_separated_into_valid_search_paths};
+use crate::{parse::{search::linux::parse_linux_rpath, Elf}, paths::split_colon_separated_into_valid_search_paths};
 
 pub fn parse(
     binary: Binary,
@@ -29,8 +28,6 @@ pub fn parse(
 }
 
 fn do_parse(
-    // binary: Binary,
-    // Ok((rpaths, runpaths, dt_needed, soname))
     rpaths: Vec<String>,
     runpaths: Vec<String>,
     libs_needed: Vec<String>,
@@ -40,10 +37,8 @@ fn do_parse(
     ld_library_path: &Vec<PathBuf>,
     extra_rpaths: &Vec<PathBuf>,
 ) -> Result<(Elf, Vec<PathBuf>)> {
-    // let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
-
-    let dt_rpaths = resolve_rpaths(&rpaths);
-    let dt_runpaths = resolve_rpaths(&runpaths);
+    let dt_rpaths = resolve_rpaths(&rpaths, object_path)?;
+    let dt_runpaths = resolve_rpaths(&runpaths, object_path)?;
 
     let dt_rpath_bufs: Vec<PathBuf> = dt_rpaths.values().cloned().collect();
     let dt_runpath_bufs: Vec<PathBuf> = dt_runpaths.values().cloned().collect();
@@ -51,7 +46,7 @@ fn do_parse(
     let mut dt_needed: HashMap<String, PathBuf> = HashMap::new();
 
     for lib in &libs_needed {
-        match crate::search::linux::search(
+        match crate::parse::search::linux::search(
             lib,
             &dt_rpath_bufs,
             extra_rpaths,
@@ -85,22 +80,17 @@ fn do_parse(
     Ok((elf, dt_rpath_bufs))
 }
 
-fn resolve_rpaths(rpaths: &Vec<String>) -> HashMap<String, PathBuf> {
+fn resolve_rpaths(rpaths: &Vec<String>, object_path: &PathBuf) -> Result<HashMap<String, PathBuf>> {
     let mut res = HashMap::new();
     for rpath in rpaths {
-        let path = PathBuf::from_str(rpath);
-        match path {
-            Ok(path) => {
-                if path.exists() && path.is_dir() {
-                    res.insert(rpath.clone(), path);
-                }
-            }
-            Err(e) => {
-                warn!("path parse failure: {rpath}: {e}");
+        match parse_linux_rpath(rpath, object_path)? {
+            None => {},
+            Some(path) => {
+                res.insert(rpath.clone(), path);
             }
         }
     }
-    res
+    Ok(res)
 }
 
 fn get_dynamic_entries(

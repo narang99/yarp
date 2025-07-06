@@ -1,6 +1,7 @@
 mod core;
 mod elf;
 mod macho;
+mod search;
 
 use anyhow::Context;
 use anyhow::Error;

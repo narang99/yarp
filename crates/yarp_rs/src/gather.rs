@@ -20,7 +20,7 @@ use crate::{
     graph::FileGraph,
     manifest::{Env, Skip, Sys, Version, YarpManifest},
     node::{Node, deps::Deps},
-    paths::{get_dyld_library_path, is_sys_lib},
+    paths::is_sys_lib,
 };
 
 pub fn build_graph_from_manifest(
@@ -111,7 +111,6 @@ pub fn get_python_universe(
     Vec<PythonPathComponent>,
     HashMap<String, PathBuf>,
 )> {
-    let dyld_library_path = get_dyld_library_path(&manifest.env);
     Deps::from_path(
         &PathBuf::from(
             "/Users/hariomnarang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/lib/libtorch.dylib",

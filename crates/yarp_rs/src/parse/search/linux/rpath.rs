@@ -4,31 +4,11 @@ use anyhow::{Context, Result, anyhow};
 use log::error;
 
 use crate::{
+    parse::search::linux::auxval::get_at_platform,
     paths::{to_path_buf, to_string_path},
-    search::linux::auxval::get_at_platform,
 };
 
-pub fn get_valid_rpaths(paths: &Vec<String>, object_path: &PathBuf) -> Vec<PathBuf> {
-    // we dont fail on rpath parse failures, log the error and move on
-    let mut res = Vec::new();
-    for p in paths {
-        let rpath = parse_rpath(p, object_path);
-        match rpath {
-            Ok(rpath) => match rpath {
-                Some(rpath) => {
-                    res.push(rpath);
-                }
-                None => {}
-            },
-            Err(e) => {
-                error!("failure in parsing rpath: {}, ignoring. error={}", p, e);
-            }
-        };
-    }
-    res
-}
-
-fn parse_rpath(rpath: &str, object_path: &PathBuf) -> Result<Option<PathBuf>> {
+pub fn parse_rpath(rpath: &str, object_path: &PathBuf) -> Result<Option<PathBuf>> {
     let parent_path_str = object_path
         .parent()
         .with_context(|| anyhow!("fatal: failed to get parent of {:}", object_path.display()))

@@ -31,14 +31,6 @@ struct SharedLibCtx<'a> {
     dyld_library_path: &'a Vec<PathBuf>,
 }
 
-pub fn get_deps_from_macho(macho: &Macho) -> Vec<PathBuf> {
-    macho
-        .load_cmds
-        .iter()
-        .map(|(_, path)| path.clone())
-        .collect()
-}
-
 /// parse a macho file and get its dependencies
 /// Parsing logic depends on three kinds of paths
 /// First is an actual path, denoted by Path/PathBuf
