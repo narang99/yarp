@@ -5,16 +5,17 @@ use std::{collections::HashMap, path::PathBuf};
 use anyhow::{Context, Result, anyhow, bail};
 use log::info;
 use rand::{Rng, rng};
-use rayon::current_thread_index;
 use walkdir::WalkDir;
 
+mod make;
 mod node_factory;
 mod site_pkgs_comp;
 pub use site_pkgs_comp::PythonPathComponent;
 
 use crate::{
     gather::{
-        node_factory::{CreateNode, generate_node},
+        make::mk_nodes_parallel,
+        node_factory::{NodeSpec, generate_node},
         site_pkgs_comp::get_python_path_mapping,
     },
     graph::FileGraph,
@@ -111,17 +112,8 @@ pub fn get_python_universe(
     Vec<PythonPathComponent>,
     HashMap<String, PathBuf>,
 )> {
-    Deps::from_path(
-        &PathBuf::from(
-            "/Users/hariomnarang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/lib/libtorch.dylib",
-        ),
-        &manifest.python.sys.executable,
-        cwd,
-        &manifest.env,
-        &HashMap::new(),
-    )?;
     info!("gather files: Pass 1, begin");
-    let (create_nodes, py_comps) = get_create_node_payloads(manifest)?;
+    let (create_nodes, py_comps) = get_node_specs(manifest)?;
     let (mut res, failures) = mk_nodes_parallel(&create_nodes, manifest, cwd, &manifest.env);
 
     info!(
@@ -146,66 +138,6 @@ pub fn get_python_universe(
     Ok((res, py_comps, known_libs))
 }
 
-fn mk_nodes_parallel(
-    create_nodes: &Vec<CreateNode>,
-    manifest: &YarpManifest,
-    cwd: &PathBuf,
-    env: &HashMap<String, String>,
-) -> (Vec<Node>, Vec<CreateNode>) {
-    use rayon::prelude::*;
-
-    let empty_known_libs = HashMap::new();
-    let mut res = Vec::new();
-    let mut failures = Vec::new();
-
-    let num_threads = rayon::current_num_threads();
-    let chunk_size = (create_nodes.len() + num_threads - 1) / num_threads;
-    info!(
-        "gather: creating nodes, chunk_size={} threads={}",
-        chunk_size, num_threads
-    );
-
-    let results: Vec<(Vec<Node>, Vec<CreateNode>)> = create_nodes
-        .par_chunks(chunk_size)
-        .map(|chunk| {
-            let thread_idx = current_thread_index().unwrap_or(0);
-            let mut local_res = Vec::new();
-            let mut local_failures = Vec::new();
-            let mut i = 0;
-            let total = chunk.len();
-            for payload in chunk {
-                let node = generate_node(
-                    payload,
-                    &manifest.python.sys.executable,
-                    cwd,
-                    env,
-                    &empty_known_libs,
-                );
-                match node {
-                    Ok(node) => {
-                        local_res.push(node);
-                    }
-                    Err(_) => {
-                        local_failures.push(payload.clone());
-                    }
-                }
-                i += 1;
-                if i % (total / 10) == 0 {
-                    info!("thread: {} exported {}/{} files", thread_idx, i, total);
-                }
-            }
-            (local_res, local_failures)
-        })
-        .collect();
-
-    for (local_res, local_failures) in results {
-        res.extend(local_res);
-        failures.extend(local_failures);
-    }
-
-    (res, failures)
-}
-
 fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
     for prefix in &skip.prefixes {
         if path.starts_with(prefix) {
@@ -218,8 +150,10 @@ fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
 fn get_libs_scanned_in_nodes(nodes: &Vec<Node>) -> Result<HashMap<String, PathBuf>> {
     let mut res = HashMap::new();
     for node in nodes {
-        let (file_name, path) = get_lib_from_node(node)?;
-        res.insert(file_name, path);
+        if let Deps::Binary(_) = node.deps {
+            let (file_name, path) = get_lib_from_node(node)?;
+            res.insert(file_name, path);
+        }
     }
 
     Ok(res)
@@ -239,18 +173,16 @@ fn get_lib_from_node(node: &Node) -> Result<(String, PathBuf)> {
     Ok((file_name.to_string(), node.path.clone()))
 }
 
-fn get_create_node_payloads(
-    manifest: &YarpManifest,
-) -> Result<(Vec<CreateNode>, Vec<PythonPathComponent>)> {
+fn get_node_specs(manifest: &YarpManifest) -> Result<(Vec<NodeSpec>, Vec<PythonPathComponent>)> {
     let mut res = Vec::new();
     let sys = &manifest.python.sys;
+    let lib_dynload_path = get_lib_dynload_loc(sys);
 
-    res.push(CreateNode::Executable {
+    res.push(NodeSpec::Executable {
         path: sys.executable.clone(),
     });
 
-    let lib_dynload_path = get_lib_dynload_loc(sys);
-    res.extend(get_create_nodes_payload_recursive(
+    res.extend(get_node_specs_recursive(
         &lib_dynload_path,
         &sys.version,
         &random_string(),
@@ -259,7 +191,7 @@ fn get_create_node_payloads(
     )?);
 
     let stdlib_path = get_stdlib_loc(sys);
-    res.extend(get_create_nodes_payload_recursive(
+    res.extend(get_node_specs_recursive(
         &stdlib_path,
         &sys.version,
         &random_string(),
@@ -286,7 +218,7 @@ fn get_create_node_payloads(
             site_pkg.display(),
             site_pkg_by_alias.get(site_pkg)
         );
-        res.extend(get_create_nodes_payload_recursive(
+        res.extend(get_node_specs_recursive(
             site_pkg,
             &sys.version,
             site_pkg_by_alias.get(site_pkg).expect(&format!("fatal: could not find alias for site-packages, site_pkg={:?} site-packages-map={:?}", site_pkg, site_pkg_by_alias)),
@@ -298,7 +230,7 @@ fn get_create_node_payloads(
         if should_skip(&p.path, &manifest.skip) {
             continue;
         }
-        res.push(CreateNode::BinaryInLdPath {
+        res.push(NodeSpec::BinaryInLdPath {
             path: p.path.clone(),
             symlinks: p.symlinks.clone(),
         });
@@ -311,7 +243,7 @@ fn get_create_node_payloads(
         if is_sys_library {
             continue;
         }
-        res.push(CreateNode::Binary {
+        res.push(NodeSpec::Binary {
             path: p.path.clone(),
         });
     }
@@ -338,13 +270,13 @@ enum CreateNodeToMake {
     ExecPrefix,
 }
 
-fn get_create_nodes_payload_recursive(
+fn get_node_specs_recursive(
     directory: &PathBuf,
     version: &Version,
     alias: &String,
     to_make: CreateNodeToMake,
     skip: &Skip,
-) -> Result<Vec<CreateNode>> {
+) -> Result<Vec<NodeSpec>> {
     if !directory.exists() {
         bail!(
             "fatal: tried finding nodes recursively for directory={}, but it does not exist",
@@ -358,19 +290,19 @@ fn get_create_nodes_payload_recursive(
             continue;
         }
         let create_node = match to_make {
-            CreateNodeToMake::Prefix => CreateNode::PrefixPkg {
+            CreateNodeToMake::Prefix => NodeSpec::PrefixPkg {
                 original_prefix: directory.clone(),
                 alias: alias.clone(),
                 version: version.clone(),
                 path: p.clone(),
             },
-            CreateNodeToMake::ExecPrefix => CreateNode::ExecPrefixPkg {
+            CreateNodeToMake::ExecPrefix => NodeSpec::ExecPrefixPkg {
                 original_prefix: directory.clone(),
                 alias: alias.clone(),
                 version: version.clone(),
                 path: p.clone(),
             },
-            CreateNodeToMake::SitePkg => CreateNode::SitePkg {
+            CreateNodeToMake::SitePkg => NodeSpec::SitePkg {
                 site_pkg_path: directory.clone(),
                 alias: alias.clone(),
                 version: version.clone(),

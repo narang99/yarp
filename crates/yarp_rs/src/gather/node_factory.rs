@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub enum CreateNode {
+pub enum NodeSpec {
     Executable {
         path: PathBuf,
     },
@@ -42,7 +42,7 @@ pub enum CreateNode {
 }
 
 pub fn generate_node(
-    payload: &CreateNode,
+    payload: &NodeSpec,
     executable_path: &PathBuf,
     cwd: &PathBuf,
     env: &HashMap<String, String>,
@@ -59,7 +59,7 @@ pub fn generate_node(
         )
     };
     match payload {
-        CreateNode::Executable { path } => {
+        NodeSpec::Executable { path } => {
             let deps = Deps::new_binary(
                 executable_path,
                 executable_path,
@@ -69,33 +69,33 @@ pub fn generate_node(
             )?;
             Node::new(path.clone(), Pkg::Executable, deps)
         }
-        CreateNode::ExecPrefixPkg {
+        NodeSpec::ExecPrefixPkg {
             path,
             original_prefix,
             alias,
             version,
         } => get_exec_prefix_pkg(path, original_prefix, alias, version)
             .and_then(|pkg| make_node(pkg, path)),
-        CreateNode::PrefixPkg {
+        NodeSpec::PrefixPkg {
             path,
             original_prefix,
             alias,
             version,
         } => get_prefix_pkg(path, original_prefix, alias, version)
             .and_then(|pkg| make_node(pkg, path)),
-        CreateNode::SitePkg {
+        NodeSpec::SitePkg {
             path,
             site_pkg_path,
             alias,
             version,
         } => get_site_packages_pkg(path, site_pkg_path, alias, version)
             .and_then(|pkg| make_node(pkg, path)),
-        CreateNode::BinaryInLdPath { path, symlinks } => Node::new(
+        NodeSpec::BinaryInLdPath { path, symlinks } => Node::new(
             path.clone(),
             Pkg::BinaryInLDPath { symlinks: symlinks.clone() },
             Deps::new_binary(&path, executable_path, cwd, env, known_libs)?,
         ),
-        CreateNode::Binary { path } => Node::new(
+        NodeSpec::Binary { path } => Node::new(
             path.clone(),
             Pkg::Binary,
             Deps::new_binary(&path, executable_path, cwd, env, known_libs)?,

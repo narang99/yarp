@@ -194,3 +194,47 @@ the general strategy can be
 
 Implementation rust:
 - we don't care about arbitrary dlopen calls at this point. we basically follow the `man 8 ld.so` faithfully
+
+
+## RPath problem in linux
+All the objects in my python installation are using DT_RPATH, not DT_RUNPATH  
+We have a problem here, due to the whole nesting of DT_RPATH
+
+
+- torch/C_.python3.9.so has DT_RPATH=$ORIGIN/lib
+  - it is the only one linking to lib/libc10.so
+  - the problem now is that `lib/libc10.so` has many libs inside the `lib` folder as `DT_NEEDED`
+    - its impossible to gather the nodes without knowing the order in which these libraries are loaded
+- linux linker however, does not have nested namespaces
+  - in this case, name clashes are fine (we would find multiple libraries in multiple places)
+- thats okay though, as I said, name clashes are fine in linux
+  - so now we basically collect ALL the rpaths in the first pass
+  - there is one issue though, we return errors on libraries which we are not able to load (without the rpaths)
+- the other thing that we can do is track c extension imports now
+  - basically want all entrypoints that are opened in the python process
+  - if we theoretically have all of them, we can also parse their deps in a tree like fashion (exactly how the linker works)
+  - when scanning the FS for remaining deps, we would skip the files which we have scanned
+
+## on shared library names
+
+Best Reference:
+- https://flameeyes.blog/2010/10/08/linkers-and-names/
+
+There is some confusion when it comes to the path name of the library, and its SONAME.  
+The confusion exists if you only think about the behavior in runtime.  
+
+When compiling an application against a library, the linker (in the compiler, called the link editor) would use `SONAME` as the value for `DT_NEEDED`  
+`ld.so` however, at execution time, only cares about `DT_NEEDED`, the `SONAME` is not even considered  
+During installation `ldconfig` scans a library, finds its `SONAME` and creates a symlink with this name in the linker's search path.  
+This is very indirect, but it is what it is :)
+
+
+Finally on searching:
+- given a name to `dlopen`, we need to do the search that the linker does normally. Nothing special about it. Don't care about `SONAME`  
+- same for searching after scanning a shared library
+
+
+- There is one indirection I'm using in python, im using `find_library` to get the SONAME and search it. This is fine, as it is the closest I can get to how libraries are searching for dependencies inside python
+
+
+## nested libraries with same SONAME and symbols

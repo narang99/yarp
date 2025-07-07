@@ -1,9 +1,12 @@
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
+
+LoadKind = Literal["extension", "dlopen"]
 
 @dataclass(frozen=True)
 class LocalLoad:
+    kind: LoadKind
     path: str
 
 
@@ -15,10 +18,11 @@ class LoadParams:
 @dataclass(frozen=True)
 class Load:
     path: str
+    kind: LoadKind
     symlinks: list[str]
 
     def to_dict(self) -> dict[str, Any]:
-        return {"path": self.path, "symlinks": self.symlinks}
+        return {"path": self.path, "symlinks": self.symlinks, "kind": self.kind}
 
 @dataclass(frozen=True)
 class Lib:

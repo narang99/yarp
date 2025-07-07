@@ -1,5 +1,6 @@
 
 import importlib
+from typing import Any
 
 def _get_element(mod, attrs):
     el = mod
@@ -40,7 +41,7 @@ def try_monkey_patch(mod, attrs, add_lib_callback, args_to_path):
         print("failed in importing", mod, ex)
 
 
-def kwarg_else_arg(var, i):
+def kwarg_else_arg(var: str, i: int) -> Any:
     """return a function which tries to find `kwargs[var]` or `args[i]` from its arguments
 
     When we monkey patch a function like `dlopen`, we want to infer the path that `dlopen` was trying to open

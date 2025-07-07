@@ -16,15 +16,25 @@ pub struct YarpManifest {
     pub skip: Skip,
 }
 
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Skip {
     pub prefixes: Vec<PathBuf>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadKind {
+    Extension,
+    Dlopen,
 }
 
 /// these are the ones which are dlopen-ed
 /// they would be kept in ld-library-path
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
+
+    pub kind: LoadKind,
     pub path: PathBuf,
     pub symlinks: Vec<String>,
 }

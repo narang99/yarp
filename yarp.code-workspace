@@ -33,6 +33,7 @@
 			"libdyld",
 			"libpango",
 			"libtest",
+			"objdump",
 			"pathdiff",
 			"petgraph",
 			"platlibdir",

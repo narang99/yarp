@@ -3,7 +3,9 @@ import json
 import os
 import atexit
 from typing import Optional
+from yarp.discover.all_libs import get_libs
 from yarp.discover.callbacks import cffi_dlopen_callback, ctypes_cdll_callback
+from yarp.discover.imports import add_import_callback, register_import_watcher
 from yarp.discover.python_props import get_python_props
 from yarp.discover.monkeypatch import kwarg_else_arg, try_monkey_patch
 from yarp.discover.types import *
@@ -12,7 +14,7 @@ DUMP_LOC_ENV_VAR = "YARP_JSON"
 DEFAULT_LOC = "yarp.json"
 
 
-LOADS: dict[LocalLoad, list[LoadParams]] = {}
+LOADS: dict[LocalLoad, LoadParams] = {}
 
 
 def monkey_patch_dlopen():
@@ -42,14 +44,6 @@ def monkey_patch_dlopen():
     )
 
 
-def _get_all_loaded_libraries() -> list[str]:
-    from yarp.discover.macho import get_dyld_finder
-
-    dyld_finder = get_dyld_finder()
-    all_dylibs = dyld_finder()
-    return all_dylibs
-
-
 def _validate_prepared_loads(loads: dict[LocalLoad, LoadParams]):
     for local_load in loads:
         if not os.path.isabs(local_load.path):
@@ -73,16 +67,16 @@ def main_exit_handler(pkgs_to_skip: list[str]):
 def exit_handler(prefixes_to_skip: list[str]):
     from copy import deepcopy
 
-    loads: dict[LocalLoad, list[LoadParams]] = deepcopy(LOADS)
+    loads: dict[LocalLoad, LoadParams] = deepcopy(LOADS)
     _validate_prepared_loads(loads)
 
     dump_loc = os.environ.get(DUMP_LOC_ENV_VAR, DEFAULT_LOC)
     payload = YarpDiscovery(
         loads=[
-            Load(path=load.path, symlinks=list(param.symlinks))
+            Load(path=load.path, symlinks=list(param.symlinks), kind=load.kind)
             for load, param in loads.items()
         ],
-        libs=[Lib(path=lib) for lib in _get_all_loaded_libraries()],
+        libs=[Lib(path=lib) for lib in get_libs()],
         python=get_python_props(),
         skip=Skip(prefixes=prefixes_to_skip),
         env={str(k): str(v) for k, v in os.environ.items()},
@@ -102,4 +96,5 @@ def yarp_init_discovery(skip: Optional[list[str]] = None):
         return
     _ENABLED_DISCOVERY = True
     monkey_patch_dlopen()
+    register_import_watcher(partial(add_import_callback, loads=LOADS))
     atexit.register(lambda: main_exit_handler(skip))

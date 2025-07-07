@@ -1,13 +1,9 @@
-use std::{env, path::PathBuf};
+use std::{collections::HashMap, env, path::PathBuf, process::exit};
 
 use log::info;
 
 use crate::{
-    gather::build_graph_from_manifest,
-    graph::FileGraph,
-    manifest::YarpManifest,
-    paths::normalize_path,
-    pkg::{bootstrap::write_bootstrap_script, move_to_dist},
+    gather::build_graph_from_manifest, graph::FileGraph, manifest::YarpManifest, parse::parse_and_search, paths::normalize_path, pkg::{bootstrap::write_bootstrap_script, move_to_dist}
 };
 
 pub mod digest;
@@ -55,7 +51,6 @@ pub mod parse;
 
 fn main() {
     env_logger::init();
-
     let start_time = std::time::Instant::now();
     export_files();
     let duration = start_time.elapsed();
@@ -73,6 +68,16 @@ fn export_files() {
     ));
     let manifest = get_manifest(&manifest_contents);
     let cwd = env::current_dir().unwrap();
+    // parse_and_search(
+    //     &PathBuf::from("/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/lib/libc10.so"), 
+    //     &manifest.python.sys.executable, 
+    //     &cwd, 
+    //     &manifest.env, 
+    //     &HashMap::new(), 
+    //     &Vec::new(),
+    // ).unwrap();
+    // exit(1);
+
     let (graph, path_components) =
         build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
     let dist = cwd.join("dist");
@@ -99,7 +104,6 @@ fn get_manifest(manifest_contents: &str) -> Box<YarpManifest> {
         .iter()
         .map(|p| normalize_path(p))
         .collect();
-    // manifest.python.sys.path.push(manifest.python.sys.prefix.join("lib"));
     Box::new(manifest)
 }
 

@@ -75,4 +75,12 @@ impl Binary {
             Binary::Elf(elf) => elf.dt_needed.values().cloned().collect(),
         }
     }
+
+    pub fn paths_to_add_for_next_search(&self) -> Vec<PathBuf> {
+        // DT_RPATH in linux requires us to use the current RPATH the dependencies search space too
+        match self {
+            Binary::Macho(_) => Vec::new(),
+            Binary::Elf(elf) => elf.dt_rpaths.values().cloned().collect(),
+        }
+    }
 }

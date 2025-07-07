@@ -11,7 +11,7 @@ pub fn parse(
     cwd: &PathBuf,
     env: &HashMap<String, String>,
     extra_rpaths: &Vec<PathBuf>,
-) -> Result<(Elf, Vec<PathBuf>)> {
+) -> Result<Elf> {
     let ld_preload = split_colon_separated_into_valid_search_paths(env.get("LD_PRELOAD"));
     let ld_library_path = split_colon_separated_into_valid_search_paths(env.get("LD_LIBRARY_PATH"));
     let (rpaths, runpaths, libs_needed, _soname) = get_dynamic_entries(&binary, object_path)?;
@@ -36,7 +36,7 @@ fn do_parse(
     ld_preload: &Vec<PathBuf>,
     ld_library_path: &Vec<PathBuf>,
     extra_rpaths: &Vec<PathBuf>,
-) -> Result<(Elf, Vec<PathBuf>)> {
+) -> Result<Elf> {
     let dt_rpaths = resolve_rpaths(&rpaths, object_path)?;
     let dt_runpaths = resolve_rpaths(&runpaths, object_path)?;
 
@@ -77,7 +77,7 @@ fn do_parse(
         all_dt_runpaths: runpaths,
     };
 
-    Ok((elf, dt_rpath_bufs))
+    Ok(elf)
 }
 
 fn resolve_rpaths(rpaths: &Vec<String>, object_path: &PathBuf) -> Result<HashMap<String, PathBuf>> {

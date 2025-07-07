@@ -6,8 +6,8 @@ use std::path::PathBuf;
 
 use log::warn;
 
-use crate::{paths::to_path_buf};
 pub use crate::parse::search::linux::rpath::parse_rpath as parse_linux_rpath;
+use crate::paths::to_path_buf;
 
 macro_rules! try_find_in_dirs {
     ($name:expr, $dirs:expr) => {
@@ -54,6 +54,16 @@ pub fn search(
     if let Ok(path) = ldconfig::find(name) {
         return Some(path);
     }
+
+    try_find_in_dirs!(
+        name,
+        &vec![
+            PathBuf::from("/lib64"),
+            PathBuf::from("/lib"),
+            PathBuf::from("/usr/lib64"),
+            PathBuf::from("/usr/lib")
+        ]
+    );
 
     None
 }

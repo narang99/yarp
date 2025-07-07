@@ -20,7 +20,7 @@ impl Deps {
     ) -> Result<Deps> {
         let bin = crate::parse::parse_and_search(path, executable_path, cwd, env, known_libs, &Vec::new());
         match bin {
-            Ok((bin, _)) => Ok(Deps::Binary(bin)),
+            Ok(bin) => Ok(Deps::Binary(bin)),
             Err(e) => {
                 if let Some(parse_err) = e.downcast_ref::<BinaryParseError>() {
                     match parse_err {
@@ -32,6 +32,13 @@ impl Deps {
                     Err(e)
                 }
             }
+        }
+    }
+
+    pub fn paths_to_add_for_next_search(&self) -> Vec<PathBuf> {
+        match self {
+            Deps::Binary(binary) => binary.paths_to_add_for_next_search(),
+            _ => Vec::new(),
         }
     }
 
