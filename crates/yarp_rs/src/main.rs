@@ -3,7 +3,7 @@ use std::{collections::HashMap, env, path::PathBuf, process::exit};
 use log::info;
 
 use crate::{
-    gather::build_graph_from_manifest, graph::FileGraph, manifest::YarpManifest, parse::parse_and_search, paths::normalize_path, pkg::{bootstrap::write_bootstrap_script, move_to_dist}
+    gather::{build_graph_from_manifest, NodeFactory}, graph::FileGraph, manifest::YarpManifest, parse::parse_and_search, paths::normalize_path, pkg::{bootstrap::write_bootstrap_script, move_to_dist}
 };
 
 pub mod digest;
@@ -109,7 +109,7 @@ fn get_manifest(manifest_contents: &str) -> Box<YarpManifest> {
     Box::new(manifest)
 }
 
-fn move_all_nodes(graph: &FileGraph, dist: &PathBuf) {
+fn move_all_nodes(graph: &FileGraph<NodeFactory>, dist: &PathBuf) {
     info!("exporting files to dist");
     let total = graph.len();
     let mut i = 0;
