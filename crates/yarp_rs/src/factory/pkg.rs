@@ -1,15 +1,13 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use pathdiff::diff_paths;
 
 use crate::{
     digest::make_digest,
     manifest::Version,
-    node::{Node, Pkg, PrefixBinary, PrefixPlain},
-    paths::normalize_path,
+    node::{Pkg, PrefixBinary, PrefixPlain},
     pkg::paths::is_shared_library,
-    site_pkgs::SitePkgs,
 };
 
 pub fn get_exec_prefix_pkg(
