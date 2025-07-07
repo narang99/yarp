@@ -60,10 +60,15 @@ impl<T: Factory> FileGraph<T> {
     /// simply add a node to the graph, this is a plain operation
     /// No dependency analysis or edge making is done
     /// use `add_tree` for that
-    pub fn add_node(&mut self, node: Node) -> NodeIndex {
+    pub fn add_node(&mut self, node: Node, replace: bool) -> NodeIndex {
         let idx = self.idx_by_path.get_by_right(&node.path);
         match idx {
-            Some(idx) => *idx,
+            Some(idx) => {
+                if replace {
+                    self.path_by_node.insert(node.path.clone(), node);
+                }
+                *idx
+            },
             None => {
                 let idx = self.inner.add_node(());
                 self.raw_add_node(idx, node);
@@ -90,9 +95,10 @@ impl<T: Factory> FileGraph<T> {
         &mut self,
         node: Node,
         known_libs: &HashMap<String, PathBuf>,
+        replace: bool,
     ) -> Result<NodeIndex> {
         let path = node.path.clone();
-        let idx = self.add_node(node);
+        let idx = self.add_node(node, replace);
         let node = self
             .path_by_node
             .get(&path)
@@ -110,7 +116,7 @@ impl<T: Factory> FileGraph<T> {
             let parent_node = self.get_or_create_node(&p, known_libs)?;
             if let Some(parent_node) = parent_node {
                 let parent_idx = self
-                    .add_tree(parent_node, known_libs)
+                    .add_tree(parent_node, known_libs, false)
                     .context(anyhow!("file: {}", p.display()))?;
                 self.inner.add_edge(parent_idx, idx, ());
                 if !self.inner.contains_edge(parent_idx, idx) {
@@ -225,7 +231,7 @@ mod test {
         let mut graph = get_graph();
         let path = touch_path(&tmp, "python");
         let node = Node::mock(path, vec![]).unwrap();
-        let idx = graph.add_tree(node, &HashMap::new()).unwrap();
+        let idx = graph.add_tree(node, &HashMap::new(), false).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
         assert!(graph.idx_by_path.contains_left(&idx));
     }
@@ -240,7 +246,7 @@ mod test {
         let lib_test = Node::mock(p_lib_test.clone(), vec![]).unwrap();
         let py_node = Node::mock(p_python, vec![p_lib_test]).unwrap();
 
-        graph.add_tree(py_node.clone(), &HashMap::new()).unwrap();
+        graph.add_tree(py_node.clone(), &HashMap::new(), false).unwrap();
         assert_eq!(graph.inner.node_count(), 2);
         assert_eq!(graph.inner.edge_count(), 1);
         assert!(graph.idx_by_path.contains_right(&lib_test.path));
@@ -255,10 +261,10 @@ mod test {
         let p_python = touch_path(&tmp, "python");
         let node = Node::mock(p_python, vec![]).unwrap();
 
-        graph.add_tree(node.clone(), &HashMap::new()).unwrap();
+        graph.add_tree(node.clone(), &HashMap::new(), false).unwrap();
         assert_eq!(graph.inner.node_count(), 1);
 
-        graph.add_tree(node.clone(), &HashMap::new()).unwrap();
+        graph.add_tree(node.clone(), &HashMap::new(), false).unwrap();
         assert_eq!(graph.inner.node_count(), 1); // Should not add duplicate
     }
 
@@ -281,12 +287,12 @@ mod test {
         let main_path = touch_path(&tmp, "python");
         let main = Node::mock(main_path, vec![dep1_path, dep3_path]).unwrap();
 
-        graph.add_node(main.clone());
-        graph.add_node(dep1.clone());
-        graph.add_node(dep2.clone());
-        graph.add_node(dep3.clone());
+        graph.add_node(main.clone(), false);
+        graph.add_node(dep1.clone(), false);
+        graph.add_node(dep2.clone(), false);
+        graph.add_node(dep3.clone(), false);
 
-        let result = graph.add_tree(main.clone(), &HashMap::new());
+        let result = graph.add_tree(main.clone(), &HashMap::new(), false);
         println!("*************end complex adding**********************");
         assert!(result.is_ok());
         assert_eq!(graph.inner.node_count(), 4);

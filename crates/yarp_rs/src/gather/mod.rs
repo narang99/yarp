@@ -3,14 +3,18 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Error, Result, anyhow, bail};
-use log::info;
+use log::{info, warn};
 use walkdir::WalkDir;
 
 pub use crate::factory::NodeFactory;
 pub use crate::site_pkgs::PythonPathComponent;
 
 use crate::{
-    factory::Factory, graph::FileGraph, manifest::{LoadKind, YarpManifest}, node::{deps::Deps, Node}, site_pkgs::SitePkgs
+    factory::Factory,
+    graph::FileGraph,
+    manifest::{LoadKind, YarpManifest},
+    node::{Node, deps::Deps},
+    site_pkgs::SitePkgs,
 };
 
 pub fn build_graph_from_manifest(
@@ -24,6 +28,7 @@ pub fn build_graph_from_manifest(
         manifest.python.sys.executable.clone(),
         cwd.clone(),
         manifest.env.clone(),
+        manifest.skip.prefixes.clone(),
     );
     let g = build_graph(manifest, cwd, &factory, &site_pkgs)?;
 
@@ -53,7 +58,7 @@ fn build_graph(
         executable_path.display()
     );
     // TODO: add the executable's DT_RPATH to extra search paths for all libraries to load
-    g.add_tree(factory.make_py_executable(executable_path)?, &known_libs)?;
+    g.add_tree(factory.make_py_executable(executable_path)?, &known_libs, true)?;
 
     // now add all loads, in the correct order, again, should not fail
     for l in &manifest.loads {
@@ -64,10 +69,10 @@ fn build_graph(
         match l.kind {
             LoadKind::Dlopen => factory
                 .make_with_symlinks(&l.path, &l.symlinks, &known_libs)
-                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs))?,
+                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs, true))?,
             LoadKind::Extension => factory
                 .make(&l.path, &known_libs)
-                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs))?,
+                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs, true))?,
         };
     }
 
@@ -80,6 +85,7 @@ fn build_graph(
         &site_pkgs.lib_dynload,
         &factory,
         &known_libs,
+        true,
     )?;
 
     // add prefix, can fail
@@ -90,12 +96,21 @@ fn build_graph(
         &site_pkgs.stdlib,
         &factory,
         &known_libs,
+        true,
     )?;
 
     // now all site-packages, can fail
     for (pkg, _) in &site_pkgs.site_pkg_by_alias {
         info!("adding site-package: path={}", pkg.display());
-        add_nodes_recursive(&mut g, &mut failures, pkg, &factory, &known_libs)?;
+        if pkg.exists() {
+            // site-packages addition would replace
+            add_nodes_recursive(&mut g, &mut failures, pkg, &factory, &known_libs, true)?;
+        } else {
+            info!(
+                "site packages at path={} does not exist, skipping",
+                pkg.display()
+            );
+        }
     }
 
     add_failures(&mut g, failures, &factory)?;
@@ -132,11 +147,14 @@ fn add_failures(
 
         let mut new_failures = Vec::new();
 
+        // failures addition does not recursively replace stuff in the graph
         for (p, _) in prev_failures {
-            factory
+            let res = factory
                 .make(&p, &known_libs)
-                .and_then(|n| add_to_graph_if_some(g, n, &known_libs))
-                .map_err(|e| new_failures.push((p, e)));
+                .and_then(|n| add_to_graph_if_some(g, n, &known_libs, false));
+            if let Err(e) = res {
+                new_failures.push((p, e));
+            }
         }
 
         if new_failures.len() >= prev_len {
@@ -164,6 +182,7 @@ fn add_nodes_recursive(
     directory: &PathBuf,
     factory: &NodeFactory,
     known_libs: &HashMap<String, PathBuf>,
+    replace: bool,
 ) -> Result<()> {
     if !directory.exists() {
         bail!(
@@ -172,11 +191,20 @@ fn add_nodes_recursive(
         );
     }
     let paths = get_paths_recursive_from_dir(directory)?;
+    let mut i = 0;
+    let total = paths.len();
+
     for p in paths {
-        factory
+        let res = factory
             .make(&p, known_libs)
-            .and_then(|n| add_to_graph_if_some(g, n, known_libs))
-            .map_err(|_| failures.push(p.clone()));
+            .and_then(|n| add_to_graph_if_some(g, n, known_libs, replace));
+        if let Err(_) = res {
+            failures.push(p);
+        }
+        i += 1;
+        if i % (total / 10) == 0 {
+            info!("graph: pass 1: {}/{} nodes", i, total);
+        }
     }
     Ok(())
 }
@@ -185,25 +213,15 @@ fn add_to_graph_if_some(
     g: &mut FileGraph<NodeFactory>,
     maybe_node: Option<Node>,
     known_libs: &HashMap<String, PathBuf>,
+    replace: bool,
 ) -> Result<()> {
     match maybe_node {
         Some(node) => {
-            g.add_tree(node, known_libs)?;
+            g.add_tree(node, known_libs, replace)?;
             Ok(())
         }
         None => Ok(()),
     }
-}
-
-fn add_executable(
-    g: &mut FileGraph<NodeFactory>,
-    factory: &NodeFactory,
-    executable_path: &PathBuf,
-    known_libs: &HashMap<String, PathBuf>,
-) -> Result<()> {
-    let node = factory.make_py_executable(executable_path)?;
-    g.add_tree(node, known_libs)?;
-    Ok(())
 }
 
 fn get_libs_from_graph(g: &FileGraph<NodeFactory>) -> HashMap<String, PathBuf> {
@@ -216,32 +234,6 @@ fn get_libs_from_graph(g: &FileGraph<NodeFactory>) -> HashMap<String, PathBuf> {
             .map(|f| known_libs.insert(f, n.path.clone()));
     }
     known_libs
-}
-
-fn get_libs_scanned_in_nodes(nodes: &Vec<Node>) -> Result<HashMap<String, PathBuf>> {
-    let mut res = HashMap::new();
-    for node in nodes {
-        if let Deps::Binary(_) = node.deps {
-            let (file_name, path) = get_lib_from_node(node)?;
-            res.insert(file_name, path);
-        }
-    }
-
-    Ok(res)
-}
-
-fn get_lib_from_node(node: &Node) -> Result<(String, PathBuf)> {
-    let file_name = node.path.file_name().expect(&format!(
-        "fatal error, impossible: found a node whose file_name could not be generated, path={}",
-        node.path.display()
-    ));
-    let file_name = file_name.to_str().with_context(|| {
-        anyhow!(
-            "failed in converting file_name to string, path={}",
-            file_name.display()
-        )
-    })?;
-    Ok((file_name.to_string(), node.path.clone()))
 }
 
 fn get_paths_recursive_from_dir(base_path: &PathBuf) -> Result<Vec<PathBuf>> {

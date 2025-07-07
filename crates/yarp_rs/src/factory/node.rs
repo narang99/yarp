@@ -35,6 +35,7 @@ impl NodeFactory {
         executable: PathBuf,
         cwd: PathBuf,
         env: HashMap<String, String>,
+        skip_prefixes: Vec<PathBuf>,
     ) -> NodeFactory {
         Self {
             site_pkgs,
@@ -42,7 +43,7 @@ impl NodeFactory {
             executable: executable,
             cwd: cwd,
             env,
-            skip_prefixes: Vec::new(),
+            skip_prefixes,
         }
     }
 }

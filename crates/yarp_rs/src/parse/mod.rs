@@ -26,12 +26,21 @@ pub fn parse_and_search(
 ) -> Result<Binary> {
     let mut file =
         std::fs::File::open(path).context(anyhow!("Can't open the file={}", path.display()))?;
+    let os = std::env::consts::OS;
     let binary = match lief::Binary::from(&mut file) {
         Some(lief::Binary::ELF(elf)) => {
+            if os != "linux" {
+                warn!("found an ELF file in non-linux system, path={}", path.display());
+                return Err(Error::new(BinaryParseError::UnsupportedArchitecture));
+            }
             let elf = parse_linux(elf, path, cwd, env, extra_rpaths)?;
             Binary::Elf(elf)
         }
         Some(lief::Binary::MachO(macho)) => {
+            if os != "macos" {
+                warn!("found a MACHO file in non-macos system, path={}", path.display());
+                return Err(Error::new(BinaryParseError::UnsupportedArchitecture));
+            }
             let macho = parse_macho(macho, path, executable_path, cwd, env, known_libs)?;
             Binary::Macho(macho)
         }
