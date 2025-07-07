@@ -2,8 +2,8 @@
 // // given a yarp manifest, gather all the nodes that we can discover
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Context, Error, Result, anyhow, bail};
-use log::{info, warn};
+use anyhow::{Error, Result, anyhow, bail};
+use log::info;
 use walkdir::WalkDir;
 
 pub use crate::factory::NodeFactory;
@@ -13,7 +13,7 @@ use crate::{
     factory::Factory,
     graph::FileGraph,
     manifest::{LoadKind, YarpManifest},
-    node::{Node, deps::Deps},
+    node::Node,
     site_pkgs::SitePkgs,
 };
 
@@ -30,26 +30,19 @@ pub fn build_graph_from_manifest(
         manifest.env.clone(),
         manifest.skip.prefixes.clone(),
     );
-    let g = build_graph(manifest, cwd, &factory, &site_pkgs)?;
+    let g = build_graph(manifest, &factory, &site_pkgs)?;
 
     Ok((g, site_pkgs.comps))
 }
 
 fn build_graph(
     manifest: &YarpManifest,
-    cwd: &PathBuf,
     factory: &NodeFactory,
     site_pkgs: &SitePkgs,
 ) -> Result<FileGraph<NodeFactory>> {
     let executable_path = &manifest.python.sys.executable;
     let known_libs = HashMap::new();
-    let env = &manifest.env;
-    let mut g = FileGraph::new(
-        executable_path.clone(),
-        cwd.clone(),
-        env.clone(),
-        factory.clone(),
-    );
+    let mut g = FileGraph::new(factory.clone());
     info!("Build graph: pass 1, begin");
 
     // first add the py executable and its whole tree, should not fail
@@ -58,7 +51,11 @@ fn build_graph(
         executable_path.display()
     );
     // TODO: add the executable's DT_RPATH to extra search paths for all libraries to load
-    g.add_tree(factory.make_py_executable(executable_path)?, &known_libs, true)?;
+    g.add_tree(
+        factory.make_py_executable(executable_path)?,
+        &known_libs,
+        true,
+    )?;
 
     // now add all loads, in the correct order, again, should not fail
     for l in &manifest.loads {

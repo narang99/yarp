@@ -4,16 +4,13 @@ use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::{factory::Factory, manifest::Env, node::Node};
+use crate::{factory::Factory, node::Node};
 
 #[derive(Debug)]
 pub struct FileGraph<T: Factory> {
-    executable_path: PathBuf,
-    cwd: PathBuf,
     inner: Graph<(), ()>,
     idx_by_path: BiHashMap<NodeIndex, PathBuf>,
     path_by_node: HashMap<PathBuf, Node>,
-    env: Env,
     factory: T,
 }
 
@@ -41,14 +38,11 @@ impl<T: Factory> Display for FileGraph<T> {
 }
 
 impl<T: Factory> FileGraph<T> {
-    pub fn new(executable_path: PathBuf, cwd: PathBuf, env: Env, factory: T) -> Self {
+    pub fn new(factory: T) -> Self {
         Self {
             inner: Graph::new(),
             idx_by_path: BiHashMap::new(),
             path_by_node: HashMap::new(),
-            executable_path,
-            cwd,
-            env,
             factory,
         }
     }
@@ -195,7 +189,7 @@ mod test {
     struct MockFactory {}
 
     impl Factory for MockFactory {
-        fn make(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Option<Node>> {
+        fn make(&self, path: &PathBuf, _known_libs: &HashMap<String, PathBuf>) -> Result<Option<Node>> {
             Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
 
@@ -206,8 +200,8 @@ mod test {
         fn make_with_symlinks(
                 &self,
                 path: &PathBuf,
-                symlinks: &Vec<String>,
-                known_libs: &HashMap<String, PathBuf>,
+                _symlinks: &Vec<String>,
+                _known_libs: &HashMap<String, PathBuf>,
             ) -> Result<Option<Node>> {
             Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
@@ -220,9 +214,7 @@ mod test {
 
     fn get_graph() -> FileGraph<MockFactory> {
         let tmp = create_temp_dir();
-        let executable_path = touch_path(&tmp, "python");
-        let cwd = PathBuf::from_str(".").unwrap();
-        FileGraph::new(executable_path, cwd, HashMap::new(), MockFactory {})
+        FileGraph::new(MockFactory {})
     }
 
     #[test]

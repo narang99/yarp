@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
-use log::warn;
 
 use crate::{node::deps::Deps, parse::BinaryParseError, pkg::paths::is_shared_library};
 
