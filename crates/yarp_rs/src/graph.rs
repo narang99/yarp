@@ -2,13 +2,10 @@ use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
+use log::info;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
-use crate::{
-    gather::Factory,
-    manifest::Env,
-    node::Node,
-};
+use crate::{factory::Factory, manifest::Env, node::Node};
 
 #[derive(Debug)]
 pub struct FileGraph<T: Factory> {
@@ -112,12 +109,14 @@ impl<T: Factory> FileGraph<T> {
 
         for p in deps {
             let parent_node = self.get_or_create_node(&p, known_libs)?;
-            let parent_idx = self
-                .add_tree(parent_node, known_libs)
-                .context(anyhow!("file: {}", p.display()))?;
-            self.inner.add_edge(parent_idx, idx, ());
-            if !self.inner.contains_edge(parent_idx, idx) {
+            if let Some(parent_node) = parent_node {
+                let parent_idx = self
+                    .add_tree(parent_node, known_libs)
+                    .context(anyhow!("file: {}", p.display()))?;
                 self.inner.add_edge(parent_idx, idx, ());
+                if !self.inner.contains_edge(parent_idx, idx) {
+                    self.inner.add_edge(parent_idx, idx, ());
+                }
             }
         }
 
@@ -128,12 +127,10 @@ impl<T: Factory> FileGraph<T> {
         &self,
         path: &PathBuf,
         known_libs: &HashMap<String, PathBuf>,
-    ) -> Result<Node> {
+    ) -> Result<Option<Node>> {
         match self.path_by_node.get(path) {
-            Some(node) => Ok(node.clone()),
-            None => {
-                self.factory.make(path, known_libs)
-            }
+            Some(node) => Ok(Some(node.clone())),
+            None => self.factory.make(path, known_libs),
         }
     }
 
@@ -186,8 +183,6 @@ impl<T: Factory> FileGraph<T> {
 #[cfg(test)]
 mod test {
 
-    use crate::{gather::NodeSpec};
-
     use super::*;
 
     use std::{path::PathBuf, str::FromStr};
@@ -195,21 +190,24 @@ mod test {
     struct MockFactory {}
 
     impl Factory for MockFactory {
-        fn make_from_spec(&self, spec: &NodeSpec, known_libs: &HashMap<String, PathBuf>) -> Result<Node> {
-            Node::mock(spec.path().clone(), Vec::new())
+        fn make(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Option<Node>> {
+            Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
-        fn make_with_symlinks(
-            &self,
-            path: &PathBuf,
-            symlinks: &Vec<String>,
-            known_libs: &HashMap<String, PathBuf>,
-        ) -> Result<Node> {
+
+        fn make_py_executable(&self, path: &PathBuf) -> Result<Node> {
             Node::mock(path.clone(), Vec::new())
         }
-        fn make_spec(&self, path: &PathBuf) -> Result<NodeSpec> {
-            Ok(NodeSpec::Binary { path: path.clone() })
+
+        fn make_with_symlinks(
+                &self,
+                path: &PathBuf,
+                symlinks: &Vec<String>,
+                known_libs: &HashMap<String, PathBuf>,
+            ) -> Result<Option<Node>> {
+            Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
     }
+
 
     fn create_temp_dir() -> tempfile::TempDir {
         tempfile::tempdir().expect("failed to create temp dir")

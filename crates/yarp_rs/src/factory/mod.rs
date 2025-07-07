@@ -1,6 +1,7 @@
 mod core;
-mod spec;
-mod main;
+mod deps;
+mod node;
+mod pkg;
 
-pub use core::{Factory, NodeSpec};
-pub use main::NodeFactory;
+pub use core::Factory;
+pub use node::NodeFactory;

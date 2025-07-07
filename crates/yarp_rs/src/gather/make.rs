@@ -4,7 +4,6 @@ use log::info;
 use rayon::current_thread_index;
 
 use crate::{
-    factory::NodeSpec,
     gather::{Factory, NodeFactory},
     node::Node,
 };

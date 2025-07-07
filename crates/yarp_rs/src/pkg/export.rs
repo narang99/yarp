@@ -13,7 +13,7 @@ impl Export for Pkg {
     fn to_destination(&self, path: &PathBuf, dest: &PathBuf, dist: &PathBuf) -> Result<()> {
         mk_parent_dirs(dest)?;
         match self {
-            Pkg::SitePackagesPlain(_)
+            Pkg::SitePackagesPlain { site_packages: _, alias: _, rel_path: _ }
             | Pkg::Plain
             | Pkg::Executable
             | Pkg::PrefixPlain(_)
@@ -21,7 +21,7 @@ impl Export for Pkg {
                 fs::copy(path, dest)?;
             }
 
-            Pkg::BinaryInLDPath { symlinks } => {
+            Pkg::BinaryInLDPath { symlinks, sha: _ } => {
                 let (rel_path, dest_dir) = mk_symlink_in_dest(dest, dist, path)?;
 
                 for symlink in symlinks {
@@ -40,8 +40,8 @@ impl Export for Pkg {
 
             },
 
-            Pkg::SitePackagesBinary(_)
-            | Pkg::Binary
+            Pkg::SitePackagesBinary { site_packages: _, alias: _, rel_path: _, sha: _ }
+            | Pkg::Binary { sha: _ }
             | Pkg::PrefixBinary(_)
             | Pkg::ExecPrefixBinary(_) => {
                 mk_symlink_in_dest(dest, dist, path)?;

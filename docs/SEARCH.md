@@ -237,4 +237,26 @@ Finally on searching:
 - There is one indirection I'm using in python, im using `find_library` to get the SONAME and search it. This is fine, as it is the closest I can get to how libraries are searching for dependencies inside python
 
 
-## nested libraries with same SONAME and symbols
+# Creating nodes
+
+There are three ways we create nodes
+- from manifest
+- from the python universe (all files that we can follow)
+- inside graph
+
+
+Manifest:
+- we can't do this in parallel, the order is very important. By definition this is serial. Can only happen inside graph
+- the python universe can be done in parallel. 
+
+The fact that I want to do parallel execution for the universe is giving a lot of pain
+Once the universe is added to the graph, we anyways have to do serial execution for all the nodes that we added for the universe
+At this point though, due to linux RPATH being transitive, it is kinda impossible to do parallel execution (a node needs to be added by default)
+Give up on parallel for now
+
+
+What kind of operations do we do on the node?
+- finding its dependencies
+- putting it in the dist folder
+
+For now, I've kept different enums for this, this seems problematic. One enum that is just the kind of the node should be enough. I'm going back to old code, no problem

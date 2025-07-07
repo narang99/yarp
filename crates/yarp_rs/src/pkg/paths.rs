@@ -11,7 +11,7 @@ use log::error;
 
 use crate::{
     manifest::Version,
-    node::{Node, Pkg, PkgSitePackages, PrefixPackages},
+    node::{Node, Pkg},
 };
 
 pub trait ExportedFileTree {
@@ -28,69 +28,114 @@ pub trait ExportedFileTree {
 impl ExportedFileTree for Pkg {
     fn destination(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
         match self {
-            Pkg::SitePackagesPlain(site_pkgs) | Pkg::SitePackagesBinary(site_pkgs) => {
-                Some(site_pkgs_path_in_dist(site_pkgs, dist))
+            Pkg::SitePackagesPlain {
+                site_packages: _,
+                alias,
+                rel_path,
             }
-            Pkg::ExecPrefixBinary(prefix_pkgs) | Pkg::ExecPrefixPlain(prefix_pkgs) => {
-                Some(exec_prefix_path_in_dist(prefix_pkgs, dist))
-            }
-            Pkg::PrefixBinary(prefix_pkgs) | Pkg::PrefixPlain(prefix_pkgs) => {
-                Some(prefix_path_in_dist(prefix_pkgs, dist))
-            }
+            | Pkg::SitePackagesBinary {
+                site_packages: _,
+                alias,
+                rel_path,
+                sha: _,
+            } => Some(site_pkgs_path_in_dist(alias, rel_path, dist)),
+            Pkg::ExecPrefixBinary(prefix_pkgs) => Some(exec_prefix_path_in_dist(
+                &prefix_pkgs.version,
+                &prefix_pkgs.rel_path,
+                dist,
+            )),
+            Pkg::ExecPrefixPlain(prefix_pkgs) => Some(exec_prefix_path_in_dist(
+                &prefix_pkgs.version,
+                &prefix_pkgs.rel_path,
+                dist,
+            )),
+            Pkg::PrefixBinary(prefix_pkgs) => Some(prefix_path_in_dist(
+                &prefix_pkgs.version,
+                &prefix_pkgs.rel_path,
+                dist,
+            )),
+            Pkg::PrefixPlain(prefix_pkgs) => Some(prefix_path_in_dist(
+                &prefix_pkgs.version,
+                &prefix_pkgs.rel_path,
+                dist,
+            )),
             Pkg::Plain => None,
-            Pkg::BinaryInLDPath { symlinks: _ } => {
-                path.file_name().map(|p| dist.join("lib").join("l").join(p))
-            }
-            Pkg::Binary => None,
+            Pkg::BinaryInLDPath {
+                symlinks: _,
+                sha: _,
+            } => path.file_name().map(|p| dist.join("lib").join("l").join(p)),
+            Pkg::Binary { sha: _ } => None,
             Pkg::Executable => Some(dist.join("python").join("bin").join("python")),
         }
     }
 
     fn reals(&self, node: &Node, dist: &PathBuf) -> Option<PathBuf> {
         match self {
-            Pkg::SitePackagesPlain(_)
+            Pkg::SitePackagesPlain {
+                site_packages: _,
+                alias: _,
+                rel_path: _,
+            }
             | Pkg::Plain
             | Pkg::Executable
             | Pkg::ExecPrefixPlain(_)
             | Pkg::PrefixPlain(_) => None,
 
-            Pkg::SitePackagesBinary(_)
-            | Pkg::Binary
-            | Pkg::BinaryInLDPath { symlinks: _ }
-            | Pkg::PrefixBinary(_)
-            | Pkg::ExecPrefixBinary(_) => reals_path_for_sha(&node.sha, &node.path, dist),
+            Pkg::SitePackagesBinary {
+                site_packages: _,
+                alias: _,
+                rel_path: _,
+                sha,
+            }
+            | Pkg::Binary { sha }
+            | Pkg::BinaryInLDPath { symlinks: _, sha } => {
+                reals_path_for_sha(&sha, &node.path, dist)
+            }
+            Pkg::PrefixBinary(pkg) | Pkg::ExecPrefixBinary(pkg) => {
+                reals_path_for_sha(&pkg.sha, &node.path, dist)
+            }
         }
     }
 
     fn symlink_farm(&self, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
         match self {
-            Pkg::SitePackagesPlain(_)
+            Pkg::SitePackagesPlain {
+                site_packages: _,
+                alias: _,
+                rel_path: _,
+            }
             | Pkg::Plain
             | Pkg::ExecPrefixPlain(_)
             | Pkg::PrefixPlain(_) => None,
 
-            Pkg::SitePackagesBinary(_)
+            Pkg::SitePackagesBinary {
+                site_packages: _,
+                alias: _,
+                rel_path: _,
+                sha: _,
+            }
             | Pkg::Executable
-            | Pkg::Binary
-            | Pkg::BinaryInLDPath { symlinks: _ }
+            | Pkg::Binary { sha: _ }
+            | Pkg::BinaryInLDPath {
+                symlinks: _,
+                sha: _,
+            }
             | Pkg::ExecPrefixBinary(_)
             | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),
         }
     }
 }
 
-fn site_pkgs_path_in_dist(site_pkgs: &PkgSitePackages, dist: &PathBuf) -> PathBuf {
-    dist.join(site_pkgs_relative_path(&site_pkgs.alias))
-        .join(&site_pkgs.rel_path)
+fn site_pkgs_path_in_dist(alias: &str, rel_path: &PathBuf, dist: &PathBuf) -> PathBuf {
+    dist.join(site_pkgs_relative_path(alias)).join(rel_path)
 }
 
 pub fn site_pkgs_relative_path(alias: &str) -> PathBuf {
     PathBuf::from("site_packages").join(alias)
 }
 
-fn exec_prefix_path_in_dist(prefix_pkgs: &PrefixPackages, dist: &PathBuf) -> PathBuf {
-    dist.join(lib_dynload_relative_path(&prefix_pkgs.version))
-        .join(&prefix_pkgs.rel_path)
+fn exec_prefix_path_in_dist(version: &Version, rel_path: &PathBuf, dist: &PathBuf) -> PathBuf {
+    dist.join(lib_dynload_relative_path(version)).join(rel_path)
 }
 
 pub fn lib_dynload_relative_path(version: &Version) -> PathBuf {
@@ -100,9 +145,8 @@ pub fn lib_dynload_relative_path(version: &Version) -> PathBuf {
         .join("lib-dynload")
 }
 
-fn prefix_path_in_dist(prefix_pkgs: &PrefixPackages, dist: &PathBuf) -> PathBuf {
-    dist.join(stdlib_relative_path(&prefix_pkgs.version))
-        .join(&prefix_pkgs.rel_path)
+fn prefix_path_in_dist(version: &Version, rel_path: &PathBuf, dist: &PathBuf) -> PathBuf {
+    dist.join(stdlib_relative_path(version)).join(rel_path)
 }
 
 pub fn stdlib_relative_path(version: &Version) -> PathBuf {

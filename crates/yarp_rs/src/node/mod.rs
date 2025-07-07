@@ -12,17 +12,7 @@ use crate::{digest::make_digest, manifest::Version, node::deps::Deps};
 pub mod deps;
 
 #[derive(Debug, Clone)]
-pub struct PkgSitePackages {
-    // original site-packages path
-    pub site_packages: PathBuf,
-    // to prevent collisions, we create an alias which is the name of this site-packages destination in dist
-    pub alias: String,
-    // the path relative to site-packages path, we simply copy data from node to this path inside alias in dist
-    pub rel_path: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-pub struct PrefixPackages {
+pub struct PrefixPlain {
     pub original_prefix: PathBuf,
 
     pub rel_path: PathBuf,
@@ -31,35 +21,62 @@ pub struct PrefixPackages {
 }
 
 #[derive(Debug, Clone)]
-pub enum Pkg {
-    SitePackagesPlain(PkgSitePackages),
-    SitePackagesBinary(PkgSitePackages),
+pub struct PrefixBinary {
+    pub original_prefix: PathBuf,
 
-    ExecPrefixPlain(PrefixPackages),
-    ExecPrefixBinary(PrefixPackages),
-    PrefixPlain(PrefixPackages),
-    PrefixBinary(PrefixPackages),
+    pub rel_path: PathBuf,
+
+    pub version: Version,
+
+    pub sha: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pkg {
+    SitePackagesPlain{
+        // original site-packages path
+        site_packages: PathBuf,
+        // to prevent collisions, we create an alias which is the name of this site-packages destination in dist
+        alias: String,
+        // the path relative to site-packages path, we simply copy data from node to this path inside alias in dist
+        rel_path: PathBuf,
+    },
+    SitePackagesBinary {
+        // original site-packages path
+        site_packages: PathBuf,
+        // to prevent collisions, we create an alias which is the name of this site-packages destination in dist
+        alias: String,
+        // the path relative to site-packages path, we simply copy data from node to this path inside alias in dist
+        rel_path: PathBuf,
+        // the sha of the binary
+        sha: String,
+    },
+
+    ExecPrefixPlain(PrefixPlain),
+    ExecPrefixBinary(PrefixBinary),
+    PrefixPlain(PrefixPlain),
+    PrefixBinary(PrefixBinary),
 
     Executable,
-    Binary,
-    BinaryInLDPath { symlinks: Vec<String> },
+    Binary {sha: String},
+    BinaryInLDPath { symlinks: Vec<String>, sha: String },
     Plain,
 }
 
 impl Pkg {
-    pub fn from_path(path: &PathBuf) -> Pkg {
+    pub fn from_path(path: &PathBuf) -> Result<Pkg> {
         // uses simple heuristics to find the packager for a path
         // it would be either of binary or plain, as we don't have context of any site-packages
         // it is preferred to pass the correct Pkg manually (you might have your own heuristics)
         // create enum variant yourself and return it
         let ext = path.extension();
         match ext {
-            None => Pkg::Plain,
+            None => Ok(Pkg::Plain),
             Some(ext) => {
                 if ext == "so" || ext == "dylib" {
-                    Pkg::Binary
+                    Ok(Pkg::Binary {sha: make_digest(path)?})
                 } else {
-                    Pkg::Plain
+                    Ok(Pkg::Plain)
                 }
             }
         }
@@ -73,8 +90,6 @@ pub struct Node {
     pub deps: Deps,
 
     pub pkg: Pkg,
-
-    pub sha: String,
 }
 
 impl Node {
@@ -107,12 +122,10 @@ impl Display for Node {
 
 impl Node {
     pub fn new(path: PathBuf, pkg: Pkg, deps: Deps) -> Result<Node> {
-        let sha = make_digest(&path)?;
         Ok(Node {
             path,
             deps,
             pkg,
-            sha,
         })
     }
 
@@ -122,8 +135,7 @@ impl Node {
         Ok(Node {
             path,
             deps: Deps::mock(deps),
-            pkg: Pkg::Binary,
-            sha,
+            pkg: Pkg::Binary {sha},
         })
     }
 }

@@ -2,21 +2,15 @@
 // // given a yarp manifest, gather all the nodes that we can discover
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use log::info;
 use walkdir::WalkDir;
 
-mod make;
-pub use crate::factory::{Factory, NodeFactory, NodeSpec};
+pub use crate::factory::NodeFactory;
 pub use crate::site_pkgs::PythonPathComponent;
 
 use crate::{
-    gather::make::mk_nodes_parallel,
-    graph::FileGraph,
-    manifest::{Env, Skip, YarpManifest},
-    node::{Node, deps::Deps},
-    paths::is_sys_lib,
-    site_pkgs::SitePkgs,
+    factory::Factory, graph::FileGraph, manifest::{LoadKind, YarpManifest}, node::{deps::Deps, Node}, site_pkgs::SitePkgs
 };
 
 pub fn build_graph_from_manifest(
@@ -31,117 +25,197 @@ pub fn build_graph_from_manifest(
         cwd.clone(),
         manifest.env.clone(),
     );
-    let (nodes, mut known_libs) = get_python_universe(manifest, cwd, &site_pkgs, &factory)?;
-    let g = build_graph(
-        nodes,
-        manifest.python.sys.executable.clone(),
-        cwd.clone(),
-        manifest.env.clone(),
-        &mut known_libs,
-        factory,
-    )?;
+    let g = build_graph(manifest, cwd, &factory, &site_pkgs)?;
+
     Ok((g, site_pkgs.comps))
 }
 
 fn build_graph(
-    nodes: Vec<Node>,
-    executable_path: PathBuf,
-    cwd: PathBuf,
-    env: Env,
-    known_libs: &mut HashMap<String, PathBuf>,
-    factory: NodeFactory,
+    manifest: &YarpManifest,
+    cwd: &PathBuf,
+    factory: &NodeFactory,
+    site_pkgs: &SitePkgs,
 ) -> Result<FileGraph<NodeFactory>> {
-    info!(
-        "building graph, number of nodes={} executable_path={} cwd={}",
-        nodes.len(),
-        executable_path.display(),
-        cwd.display()
+    let executable_path = &manifest.python.sys.executable;
+    let known_libs = HashMap::new();
+    let env = &manifest.env;
+    let mut g = FileGraph::new(
+        executable_path.clone(),
+        cwd.clone(),
+        env.clone(),
+        factory.clone(),
     );
-    let mut g = FileGraph::new(executable_path, cwd, env, factory);
     info!("Build graph: pass 1, begin");
+
+    // first add the py executable and its whole tree, should not fail
+    info!(
+        "adding python executable, path={}",
+        executable_path.display()
+    );
+    // TODO: add the executable's DT_RPATH to extra search paths for all libraries to load
+    g.add_tree(factory.make_py_executable(executable_path)?, &known_libs)?;
+
+    // now add all loads, in the correct order, again, should not fail
+    for l in &manifest.loads {
+        info!(
+            "adding load detected in manifest, path={}",
+            l.path.display()
+        );
+        match l.kind {
+            LoadKind::Dlopen => factory
+                .make_with_symlinks(&l.path, &l.symlinks, &known_libs)
+                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs))?,
+            LoadKind::Extension => factory
+                .make(&l.path, &known_libs)
+                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs))?,
+        };
+    }
+
     let mut failures = Vec::new();
+    // add exec prefix, can fail
+    info!("adding stdlib, path={}", site_pkgs.lib_dynload.display());
+    add_nodes_recursive(
+        &mut g,
+        &mut failures,
+        &site_pkgs.lib_dynload,
+        &factory,
+        &known_libs,
+    )?;
 
-    for node in &nodes {
-        g.add_node(node.clone());
-    }
+    // add prefix, can fail
+    info!("adding stdlib, path={}", site_pkgs.stdlib.display());
+    add_nodes_recursive(
+        &mut g,
+        &mut failures,
+        &site_pkgs.stdlib,
+        &factory,
+        &known_libs,
+    )?;
 
-    let mut i = 0;
-    let total = nodes.len();
-    for node in nodes {
-        match g.add_tree(node.clone(), &known_libs) {
-            Ok(_) => {}
-            Err(_) => {
-                failures.push(node);
-            }
-        }
-        i += 1;
-        if i % (total / 10) == 0 {
-            info!("graph: pass 1: {}/{} nodes", i, total);
-        }
-    }
-    info!(
-        "Build graph: pass 2, begin, number of nodes that failed to add: {}",
-        failures.len()
-    );
-    for node in g.iter_nodes() {
-        let (file_name, path) = get_lib_from_node(node)?;
-        known_libs.insert(file_name, path);
-    }
-    for node in failures {
-        g.add_tree(node, &known_libs)?;
+    // now all site-packages, can fail
+    for (pkg, _) in &site_pkgs.site_pkg_by_alias {
+        info!("adding site-package: path={}", pkg.display());
+        add_nodes_recursive(&mut g, &mut failures, pkg, &factory, &known_libs)?;
     }
 
-    info!(
-        "graph built successfully, nodes inserted in graph={}",
-        g.len()
-    );
+    add_failures(&mut g, failures, &factory)?;
+
     Ok(g)
 }
 
-/**
- * Currently, we have nodes in a graph. Its an enum
- * Each node is also hashable
- * When we add a node, we also add its dependents
- * The identity of a node is ALWAYS its absolute path (for all of them)
- * For shared libraries, we have an edge case. Each node is symlinked to only one final node in the reals directory
- * For these cases, its to_reals allows duplication, it would check for existence and only add it if its not present
- * The current problem is that a node's absolute path is not the only used component for hashing everywhere
- * We are also handling the python interpreter separately
- * Internally, the `DistNode` attached to the node is responsible for every other behavior in a polymorphic sense
- */
-pub fn get_python_universe(
-    manifest: &YarpManifest,
-    cwd: &PathBuf,
-    site_pkgs: &SitePkgs,
+fn add_failures(
+    g: &mut FileGraph<NodeFactory>,
+    failures: Vec<PathBuf>,
     factory: &NodeFactory,
-) -> Result<(Vec<Node>, HashMap<String, PathBuf>)> {
-    info!("gather files: Pass 1, begin");
-    let create_nodes = get_node_specs(manifest, &factory, &site_pkgs)?;
-    let (mut res, failures) = mk_nodes_parallel(&create_nodes, factory);
+) -> Result<()> {
+    // in each cycle, go through all the failures
+    // add them to the graph
+    // if any of them fail, keep them in the new failures vector
+    // if failures do not decrease in a loop, then break and error out with all failures
+    // else go to the next one with the new set of failures
+    // if the failures are 0, break out
+    // keep updating the known_libs values too
+    // updating known_libs is a costly operation (it converts all paths stored in the graph to known_libs in every iteration)
+    // TODO: fix known libs speed, mostly we should be able to fix it if the graph returns all the added nodes in add_tree instead of just the index
+    let mut prev_failures: Vec<(PathBuf, Error)> = failures
+        .iter()
+        .map(|p| (p.clone(), anyhow!("unknown error")))
+        .collect();
+    let mut known_libs = get_libs_from_graph(g);
 
-    info!(
-        "gather files: Pass 2, begin, number of nodes to pass again: {}",
-        failures.len()
-    );
-    let mut known_libs = get_libs_scanned_in_nodes(&res)?;
-    for payload in failures {
-        let node = factory.make_from_spec(&payload, &known_libs)?;
-        let (file_name, path) = get_lib_from_node(&node)?;
-        known_libs.insert(file_name, path);
+    let mut i = 0;
 
-        res.push(node);
+    let mut prev_len = prev_failures.len();
+    while prev_len > 0 {
+        i = i + 1;
+        info!("adding failed nodes: Pass {}, length={}", i, prev_len);
+
+        let mut new_failures = Vec::new();
+
+        for (p, _) in prev_failures {
+            factory
+                .make(&p, &known_libs)
+                .and_then(|n| add_to_graph_if_some(g, n, &known_libs))
+                .map_err(|e| new_failures.push((p, e)));
+        }
+
+        if new_failures.len() >= prev_len {
+            let errors: Vec<String> = new_failures
+                .into_iter()
+                .map(|(_, e)| format!("{:#}", e))
+                .collect();
+            bail!(
+                "fatal failure in gather, could not find the dependencies of libraries. Errors:\n{}",
+                errors.join("\n\n")
+            );
+        }
+
+        prev_failures = new_failures;
+        prev_len = prev_failures.len();
+
+        known_libs = get_libs_from_graph(g);
     }
-    info!("gather files done");
-    Ok((res, known_libs))
+    Ok(())
 }
 
-fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
-    for prefix in &skip.prefixes {
-        if path.starts_with(prefix) {
-            return true;
-        }
+fn add_nodes_recursive(
+    g: &mut FileGraph<NodeFactory>,
+    failures: &mut Vec<PathBuf>,
+    directory: &PathBuf,
+    factory: &NodeFactory,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<()> {
+    if !directory.exists() {
+        bail!(
+            "fatal: tried finding nodes recursively for directory={}, but it does not exist",
+            directory.display()
+        );
     }
-    false
+    let paths = get_paths_recursive_from_dir(directory)?;
+    for p in paths {
+        factory
+            .make(&p, known_libs)
+            .and_then(|n| add_to_graph_if_some(g, n, known_libs))
+            .map_err(|_| failures.push(p.clone()));
+    }
+    Ok(())
+}
+
+fn add_to_graph_if_some(
+    g: &mut FileGraph<NodeFactory>,
+    maybe_node: Option<Node>,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<()> {
+    match maybe_node {
+        Some(node) => {
+            g.add_tree(node, known_libs)?;
+            Ok(())
+        }
+        None => Ok(()),
+    }
+}
+
+fn add_executable(
+    g: &mut FileGraph<NodeFactory>,
+    factory: &NodeFactory,
+    executable_path: &PathBuf,
+    known_libs: &HashMap<String, PathBuf>,
+) -> Result<()> {
+    let node = factory.make_py_executable(executable_path)?;
+    g.add_tree(node, known_libs)?;
+    Ok(())
+}
+
+fn get_libs_from_graph(g: &FileGraph<NodeFactory>) -> HashMap<String, PathBuf> {
+    let mut known_libs = HashMap::new();
+    for n in g.iter_nodes() {
+        n.path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .map(|f| f.to_string())
+            .map(|f| known_libs.insert(f, n.path.clone()));
+    }
+    known_libs
 }
 
 fn get_libs_scanned_in_nodes(nodes: &Vec<Node>) -> Result<HashMap<String, PathBuf>> {
@@ -168,91 +242,6 @@ fn get_lib_from_node(node: &Node) -> Result<(String, PathBuf)> {
         )
     })?;
     Ok((file_name.to_string(), node.path.clone()))
-}
-
-fn get_node_specs(
-    manifest: &YarpManifest,
-    factory: &NodeFactory,
-    site_pkgs: &SitePkgs,
-) -> Result<Vec<NodeSpec>> {
-    let mut res = Vec::new();
-    let sys = &manifest.python.sys;
-
-    res.push(NodeSpec::Executable {
-        path: sys.executable.clone(),
-    });
-
-    res.extend(get_node_specs_recursive(
-        &site_pkgs.lib_dynload,
-        &factory,
-        &manifest.skip,
-    )?);
-
-    res.extend(get_node_specs_recursive(
-        &site_pkgs.stdlib,
-        &factory,
-        &manifest.skip,
-    )?);
-
-    for site_pkg in &site_pkgs.resolved {
-        if !site_pkg.exists() {
-            // its valid for a pythonpath to not exist
-            info!(
-                "site-packages {} does not exist, ignoring",
-                site_pkg.display()
-            );
-            continue;
-        }
-        res.extend(get_node_specs_recursive(
-            site_pkg,
-            &factory,
-            &manifest.skip,
-        )?);
-    }
-    for p in &manifest.loads {
-        if should_skip(&p.path, &manifest.skip) {
-            continue;
-        }
-        res.push(NodeSpec::BinaryInLdPath {
-            path: p.path.clone(),
-            symlinks: p.symlinks.clone(),
-        });
-    }
-    for p in &manifest.libs {
-        if should_skip(&p.path, &manifest.skip) {
-            continue;
-        }
-        let is_sys_library = p.path.to_str().map_or(false, |p| is_sys_lib(p));
-        if is_sys_library {
-            continue;
-        }
-        res.push(NodeSpec::Binary {
-            path: p.path.clone(),
-        });
-    }
-    Ok(res)
-}
-
-fn get_node_specs_recursive(
-    directory: &PathBuf,
-    factory: &NodeFactory,
-    skip: &Skip,
-) -> Result<Vec<NodeSpec>> {
-    if !directory.exists() {
-        bail!(
-            "fatal: tried finding nodes recursively for directory={}, but it does not exist",
-            directory.display()
-        );
-    }
-    let paths = get_paths_recursive_from_dir(directory)?;
-    let mut nodes = Vec::with_capacity(paths.len());
-    for p in paths {
-        if should_skip(&p, skip) {
-            continue;
-        }
-        nodes.push(factory.make_spec(&p)?);
-    }
-    Ok(nodes)
 }
 
 fn get_paths_recursive_from_dir(base_path: &PathBuf) -> Result<Vec<PathBuf>> {
