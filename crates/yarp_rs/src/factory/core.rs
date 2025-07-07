@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
+use serde::de::Expected;
 
 use crate::{manifest::Version, node::Node};
 
@@ -50,4 +51,17 @@ pub enum NodeSpec {
     Binary {
         path: PathBuf,
     },
+}
+
+impl NodeSpec {
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            NodeSpec::ExecPrefixPkg { original_prefix, version, path } => path,
+            NodeSpec::Executable { path } => path,
+            NodeSpec::PrefixPkg { original_prefix, version, path } => path,
+            NodeSpec::SitePkg { site_pkg_path, alias, version, path } => path,
+            NodeSpec::Binary { path } => path,
+            NodeSpec::BinaryInLdPath { path, symlinks } => path,
+        }
+    }
 }

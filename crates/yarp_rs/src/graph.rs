@@ -195,8 +195,8 @@ mod test {
     struct MockFactory {}
 
     impl Factory for MockFactory {
-        fn make(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Node> {
-            Node::mock(path.clone(), Vec::new())
+        fn make_from_spec(&self, spec: &NodeSpec, known_libs: &HashMap<String, PathBuf>) -> Result<Node> {
+            Node::mock(spec.path().clone(), Vec::new())
         }
         fn make_with_symlinks(
             &self,
