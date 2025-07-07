@@ -1,9 +1,9 @@
-use std::{collections::HashMap, env, path::PathBuf, process::exit};
+use std::{env, path::PathBuf};
 
 use log::info;
 
 use crate::{
-    gather::{build_graph_from_manifest, NodeFactory}, graph::FileGraph, manifest::YarpManifest, parse::parse_and_search, paths::normalize_path, pkg::{bootstrap::write_bootstrap_script, move_to_dist}
+    gather::{build_graph_from_manifest, NodeFactory}, graph::FileGraph, manifest::YarpManifest, paths::normalize_path, pkg::{bootstrap::write_bootstrap_script, move_to_dist}
 };
 
 pub mod digest;

@@ -4,7 +4,6 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
 use log::info;
-use rand::{Rng, rng};
 use walkdir::WalkDir;
 
 mod make;
@@ -14,7 +13,7 @@ pub use crate::site_pkgs::PythonPathComponent;
 use crate::{
     gather::make::mk_nodes_parallel,
     graph::FileGraph,
-    manifest::{Env, Skip, Sys, Version, YarpManifest},
+    manifest::{Env, Skip, YarpManifest},
     node::{Node, deps::Deps},
     paths::is_sys_lib,
     site_pkgs::SitePkgs,

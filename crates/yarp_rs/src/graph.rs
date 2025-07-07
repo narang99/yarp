@@ -5,9 +5,9 @@ use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
-    gather::{Factory, NodeFactory},
+    gather::Factory,
     manifest::Env,
-    node::{Node, Pkg, deps::Deps},
+    node::Node,
 };
 
 #[derive(Debug)]

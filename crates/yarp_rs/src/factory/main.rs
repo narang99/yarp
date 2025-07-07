@@ -1,12 +1,12 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 
 pub use crate::factory::core::{Factory, NodeSpec};
 
 use crate::{
     factory::spec::generate_node,
-    manifest::{Version, YarpManifest},
+    manifest::Version,
     node::Node,
     paths::normalize_path,
     pkg::paths::is_shared_library,
