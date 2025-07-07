@@ -62,7 +62,7 @@ impl<T: Factory> FileGraph<T> {
                     self.path_by_node.insert(node.path.clone(), node);
                 }
                 *idx
-            },
+            }
             None => {
                 let idx = self.inner.add_node(());
                 self.raw_add_node(idx, node);
@@ -90,6 +90,7 @@ impl<T: Factory> FileGraph<T> {
         node: Node,
         known_libs: &HashMap<String, PathBuf>,
         replace: bool,
+        search_paths: &Vec<PathBuf>,
     ) -> Result<NodeIndex> {
         let path = node.path.clone();
         let idx = self.add_node(node, replace);
@@ -106,11 +107,18 @@ impl<T: Factory> FileGraph<T> {
 
         let deps = node.deps.find()?;
 
+        let extra_search_paths = node.deps.paths_to_add_for_next_search();
+        if extra_search_paths.len() > 0 {
+            println!("addedddddddddddddd extra paths {:?}", extra_search_paths);
+        }
+        let mut search_paths = search_paths.clone();
+        search_paths.extend(extra_search_paths);
+
         for p in deps {
-            let parent_node = self.get_or_create_node(&p, known_libs)?;
+            let parent_node = self.get_or_create_node(&p, known_libs, &search_paths)?;
             if let Some(parent_node) = parent_node {
                 let parent_idx = self
-                    .add_tree(parent_node, known_libs, false)
+                    .add_tree(parent_node, known_libs, false, &search_paths)
                     .context(anyhow!("file: {}", p.display()))?;
                 self.inner.add_edge(parent_idx, idx, ());
                 if !self.inner.contains_edge(parent_idx, idx) {
@@ -126,11 +134,16 @@ impl<T: Factory> FileGraph<T> {
         &self,
         path: &PathBuf,
         known_libs: &HashMap<String, PathBuf>,
+        search_paths: &Vec<PathBuf>,
     ) -> Result<Option<Node>> {
         match self.path_by_node.get(path) {
             Some(node) => Ok(Some(node.clone())),
-            None => self.factory.make(path, known_libs),
+            None => self.factory.make(path, known_libs, search_paths),
         }
+    }
+
+    pub fn get_node_by_path(&self, path: &PathBuf) -> Option<&Node> {
+        self.path_by_node.get(path)
     }
 
     pub fn toposort(&self) -> Result<impl Iterator<Item = Node>> {
@@ -184,12 +197,17 @@ mod test {
 
     use super::*;
 
-    use std::{path::PathBuf, str::FromStr};
+    use std::path::PathBuf;
 
     struct MockFactory {}
 
     impl Factory for MockFactory {
-        fn make(&self, path: &PathBuf, _known_libs: &HashMap<String, PathBuf>) -> Result<Option<Node>> {
+        fn make(
+            &self,
+            path: &PathBuf,
+            _known_libs: &HashMap<String, PathBuf>,
+            extra_search_paths: &Vec<PathBuf>,
+        ) -> Result<Option<Node>> {
             Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
 
@@ -198,15 +216,15 @@ mod test {
         }
 
         fn make_with_symlinks(
-                &self,
-                path: &PathBuf,
-                _symlinks: &Vec<String>,
-                _known_libs: &HashMap<String, PathBuf>,
-            ) -> Result<Option<Node>> {
+            &self,
+            path: &PathBuf,
+            _symlinks: &Vec<String>,
+            _known_libs: &HashMap<String, PathBuf>,
+            extra_search_paths: &Vec<PathBuf>,
+        ) -> Result<Option<Node>> {
             Ok(Some(Node::mock(path.clone(), Vec::new())?))
         }
     }
-
 
     fn create_temp_dir() -> tempfile::TempDir {
         tempfile::tempdir().expect("failed to create temp dir")
@@ -223,7 +241,9 @@ mod test {
         let mut graph = get_graph();
         let path = touch_path(&tmp, "python");
         let node = Node::mock(path, vec![]).unwrap();
-        let idx = graph.add_tree(node, &HashMap::new(), false).unwrap();
+        let idx = graph
+            .add_tree(node, &HashMap::new(), false, &Vec::new())
+            .unwrap();
         assert_eq!(graph.inner.node_count(), 1);
         assert!(graph.idx_by_path.contains_left(&idx));
     }
@@ -238,7 +258,9 @@ mod test {
         let lib_test = Node::mock(p_lib_test.clone(), vec![]).unwrap();
         let py_node = Node::mock(p_python, vec![p_lib_test]).unwrap();
 
-        graph.add_tree(py_node.clone(), &HashMap::new(), false).unwrap();
+        graph
+            .add_tree(py_node.clone(), &HashMap::new(), false, &Vec::new())
+            .unwrap();
         assert_eq!(graph.inner.node_count(), 2);
         assert_eq!(graph.inner.edge_count(), 1);
         assert!(graph.idx_by_path.contains_right(&lib_test.path));
@@ -253,10 +275,14 @@ mod test {
         let p_python = touch_path(&tmp, "python");
         let node = Node::mock(p_python, vec![]).unwrap();
 
-        graph.add_tree(node.clone(), &HashMap::new(), false).unwrap();
+        graph
+            .add_tree(node.clone(), &HashMap::new(), false, &Vec::new())
+            .unwrap();
         assert_eq!(graph.inner.node_count(), 1);
 
-        graph.add_tree(node.clone(), &HashMap::new(), false).unwrap();
+        graph
+            .add_tree(node.clone(), &HashMap::new(), false, &Vec::new())
+            .unwrap();
         assert_eq!(graph.inner.node_count(), 1); // Should not add duplicate
     }
 
@@ -284,7 +310,7 @@ mod test {
         graph.add_node(dep2.clone(), false);
         graph.add_node(dep3.clone(), false);
 
-        let result = graph.add_tree(main.clone(), &HashMap::new(), false);
+        let result = graph.add_tree(main.clone(), &HashMap::new(), false, &Vec::new());
         println!("*************end complex adding**********************");
         assert!(result.is_ok());
         assert_eq!(graph.inner.node_count(), 4);

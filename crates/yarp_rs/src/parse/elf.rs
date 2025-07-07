@@ -108,10 +108,12 @@ fn get_dynamic_entries(
                 dt_needed.push(e.name());
             }
             DynamicEntries::Rpath(e) => {
-                rpaths.push(e.rpath());
+                let new_rpaths: Vec<String> = e.rpath().split(":").map(|s| s.to_string()).collect();
+                rpaths.extend(new_rpaths);
             }
             DynamicEntries::RunPath(e) => {
-                runpaths.push(e.runpath());
+                let new_runpaths: Vec<String> = e.runpath().split(":").map(|s| s.to_string()).collect();
+                runpaths.extend(new_runpaths);
             }
             DynamicEntries::SharedObject(e) => {
                 soname = Some(e.name());

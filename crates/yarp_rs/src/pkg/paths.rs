@@ -7,7 +7,9 @@
 
 use std::path::PathBuf;
 
+use lazy_static::lazy_static;
 use log::error;
+use regex::Regex;
 
 use crate::{
     manifest::Version,
@@ -195,12 +197,17 @@ fn loose_validate_path_is_file(path: &PathBuf) {
     }
 }
 
+lazy_static! {
+    static ref SONAME_RE: Regex = Regex::new(r"so([.\d]*)$").expect("failed to compiled regex for detecting shared library names");
+}
+
 pub fn is_shared_library(path: &PathBuf) -> bool {
-    let ext = path.extension();
-    match ext {
+    match path.to_str() {
         None => false,
-        Some(ext) => {
-            if ext == "so" || ext == "dylib" {
+        Some(path) => {
+            if path.ends_with(".dylib") {
+                true
+            } else if SONAME_RE.is_match(path) {
                 true
             } else {
                 false

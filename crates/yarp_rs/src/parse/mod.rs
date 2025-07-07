@@ -8,6 +8,7 @@ use anyhow::Error;
 use anyhow::Result;
 use anyhow::anyhow;
 pub use core::{Binary, BinaryParseError, Elf, Macho};
+use std::collections::HashSet;
 use log::warn;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -24,6 +25,8 @@ pub fn parse_and_search(
     known_libs: &HashMap<String, PathBuf>,
     extra_rpaths: &Vec<PathBuf>,
 ) -> Result<Binary> {
+    // TODO: take a set instead of doing this, this is very inefficient way of doing this
+    let extra_rpaths = &deduplicate_paths(extra_rpaths);
     let mut file =
         std::fs::File::open(path).context(anyhow!("Can't open the file={}", path.display()))?;
     let os = std::env::consts::OS;
@@ -57,4 +60,13 @@ pub fn parse_and_search(
     };
 
     Ok(binary)
+}
+
+
+fn deduplicate_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut set = HashSet::new();
+    for path in paths {
+        set.insert(path.clone());
+    }
+    set.into_iter().collect()
 }

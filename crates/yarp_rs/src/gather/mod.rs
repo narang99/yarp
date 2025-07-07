@@ -2,7 +2,7 @@
 // // given a yarp manifest, gather all the nodes that we can discover
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::{Error, Result, anyhow, bail};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use log::info;
 use walkdir::WalkDir;
 
@@ -50,12 +50,36 @@ fn build_graph(
         "adding python executable, path={}",
         executable_path.display()
     );
-    // TODO: add the executable's DT_RPATH to extra search paths for all libraries to load
+    // extra search paths for executable will be empty
     g.add_tree(
         factory.make_py_executable(executable_path)?,
         &known_libs,
         true,
+        &Vec::new(),
     )?;
+
+    let executable_extra_paths_to_search = g
+        .get_node_by_path(executable_path)
+        .context(anyhow!(
+            "fatal error: did not find node for successfully inserted python executable: path={}",
+            executable_path.display()
+        ))
+        .unwrap()
+        .deps
+        .paths_to_add_for_next_search();
+
+    println!(
+        "python executableeeeeeeEE: extra search paths: {:?}",
+        executable_extra_paths_to_search
+    );
+
+    g.add_tree(
+        factory.make(
+            &PathBuf::from("/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/_C.cpython-39-x86_64-linux-gnu.so"),
+            &known_libs,
+            &executable_extra_paths_to_search,
+        ).unwrap().unwrap(), &known_libs, false, &executable_extra_paths_to_search,
+    ).unwrap();
 
     // now add all loads, in the correct order, again, should not fail
     for l in &manifest.loads {
@@ -65,11 +89,32 @@ fn build_graph(
         );
         match l.kind {
             LoadKind::Dlopen => factory
-                .make_with_symlinks(&l.path, &l.symlinks, &known_libs)
-                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs, true))?,
+                .make_with_symlinks(
+                    &l.path,
+                    &l.symlinks,
+                    &known_libs,
+                    &executable_extra_paths_to_search,
+                )
+                .and_then(|n| {
+                    add_to_graph_if_some(
+                        &mut g,
+                        n,
+                        &known_libs,
+                        true,
+                        &executable_extra_paths_to_search,
+                    )
+                })?,
             LoadKind::Extension => factory
-                .make(&l.path, &known_libs)
-                .and_then(|n| add_to_graph_if_some(&mut g, n, &known_libs, true))?,
+                .make(&l.path, &known_libs, &executable_extra_paths_to_search)
+                .and_then(|n| {
+                    add_to_graph_if_some(
+                        &mut g,
+                        n,
+                        &known_libs,
+                        true,
+                        &executable_extra_paths_to_search,
+                    )
+                })?,
         };
     }
 
@@ -83,6 +128,7 @@ fn build_graph(
         &factory,
         &known_libs,
         true,
+        &executable_extra_paths_to_search,
     )?;
 
     // add prefix, can fail
@@ -94,6 +140,7 @@ fn build_graph(
         &factory,
         &known_libs,
         true,
+        &executable_extra_paths_to_search,
     )?;
 
     // now all site-packages, can fail
@@ -101,7 +148,15 @@ fn build_graph(
         info!("adding site-package: path={}", pkg.display());
         if pkg.exists() {
             // site-packages addition would replace
-            add_nodes_recursive(&mut g, &mut failures, pkg, &factory, &known_libs, true)?;
+            add_nodes_recursive(
+                &mut g,
+                &mut failures,
+                pkg,
+                &factory,
+                &known_libs,
+                true,
+                &executable_extra_paths_to_search,
+            )?;
         } else {
             info!(
                 "site packages at path={} does not exist, skipping",
@@ -110,7 +165,12 @@ fn build_graph(
         }
     }
 
-    add_failures(&mut g, failures, &factory)?;
+    add_failures(
+        &mut g,
+        failures,
+        &factory,
+        &executable_extra_paths_to_search,
+    )?;
 
     Ok(g)
 }
@@ -119,6 +179,7 @@ fn add_failures(
     g: &mut FileGraph<NodeFactory>,
     failures: Vec<PathBuf>,
     factory: &NodeFactory,
+    extra_search_paths: &Vec<PathBuf>,
 ) -> Result<()> {
     // in each cycle, go through all the failures
     // add them to the graph
@@ -147,8 +208,8 @@ fn add_failures(
         // failures addition does not recursively replace stuff in the graph
         for (p, _) in prev_failures {
             let res = factory
-                .make(&p, &known_libs)
-                .and_then(|n| add_to_graph_if_some(g, n, &known_libs, false));
+                .make(&p, &known_libs, extra_search_paths)
+                .and_then(|n| add_to_graph_if_some(g, n, &known_libs, false, extra_search_paths));
             if let Err(e) = res {
                 new_failures.push((p, e));
             }
@@ -180,6 +241,7 @@ fn add_nodes_recursive(
     factory: &NodeFactory,
     known_libs: &HashMap<String, PathBuf>,
     replace: bool,
+    extra_search_paths: &Vec<PathBuf>,
 ) -> Result<()> {
     if !directory.exists() {
         bail!(
@@ -193,8 +255,8 @@ fn add_nodes_recursive(
 
     for p in paths {
         let res = factory
-            .make(&p, known_libs)
-            .and_then(|n| add_to_graph_if_some(g, n, known_libs, replace));
+            .make(&p, known_libs, extra_search_paths)
+            .and_then(|n| add_to_graph_if_some(g, n, known_libs, replace, extra_search_paths));
         if let Err(_) = res {
             failures.push(p);
         }
@@ -211,10 +273,11 @@ fn add_to_graph_if_some(
     maybe_node: Option<Node>,
     known_libs: &HashMap<String, PathBuf>,
     replace: bool,
+    extra_search_paths: &Vec<PathBuf>,
 ) -> Result<()> {
     match maybe_node {
         Some(node) => {
-            g.add_tree(node, known_libs, replace)?;
+            g.add_tree(node, known_libs, replace, extra_search_paths)?;
             Ok(())
         }
         None => Ok(()),

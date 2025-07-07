@@ -10,6 +10,7 @@ pub fn create_deps(
     cwd: &PathBuf,
     env: &HashMap<String, String>,
     known_libs: &HashMap<String, PathBuf>,
+    extra_search_paths: &Vec<PathBuf>,
 ) -> Result<Deps> {
     if is_shared_library(path) {
         let bin = crate::parse::parse_and_search(
@@ -18,7 +19,7 @@ pub fn create_deps(
             cwd,
             env,
             known_libs,
-            &Vec::new(),
+            extra_search_paths,
         );
         match bin {
             Ok(bin) => Ok(Deps::Binary(bin)),

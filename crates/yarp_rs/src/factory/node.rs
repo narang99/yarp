@@ -49,8 +49,20 @@ impl NodeFactory {
 }
 
 impl NodeFactory {
-    fn create_deps(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Deps> {
-        create_deps(path, &self.executable, &self.cwd, &self.env, known_libs)
+    fn create_deps(
+        &self,
+        path: &PathBuf,
+        known_libs: &HashMap<String, PathBuf>,
+        extra_search_paths: &Vec<PathBuf>,
+    ) -> Result<Deps> {
+        create_deps(
+            path,
+            &self.executable,
+            &self.cwd,
+            &self.env,
+            known_libs,
+            extra_search_paths,
+        )
     }
 
     fn should_skip(&self, path: &PathBuf) -> bool {
@@ -69,10 +81,11 @@ impl Factory for NodeFactory {
         path: &PathBuf,
         symlinks: &Vec<String>,
         known_libs: &HashMap<String, PathBuf>,
+        extra_search_paths: &Vec<PathBuf>,
     ) -> Result<Option<Node>> {
         if self.should_skip(path) {
             info!("skip: {}", path.display());
-            return Ok(None)
+            return Ok(None);
         }
         if !is_shared_library(path) {
             bail!(
@@ -86,15 +99,20 @@ impl Factory for NodeFactory {
                 symlinks: symlinks.clone(),
                 sha: make_digest(path)?,
             },
-            self.create_deps(path, known_libs)?,
+            self.create_deps(path, known_libs, extra_search_paths)?,
         )?))
     }
 
-    fn make(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Option<Node>> {
+    fn make(
+        &self,
+        path: &PathBuf,
+        known_libs: &HashMap<String, PathBuf>,
+        extra_search_paths: &Vec<PathBuf>,
+    ) -> Result<Option<Node>> {
         let p = normalize_path(path);
         if self.should_skip(path) {
             info!("skip: {}", path.display());
-            return Ok(None)
+            return Ok(None);
         }
         if !p.exists() {
             bail!(
@@ -107,7 +125,7 @@ impl Factory for NodeFactory {
             return Ok(Some(Node::new(
                 path.clone(),
                 get_exec_prefix_pkg(path, &self.site_pkgs.lib_dynload, &self.version)?,
-                self.create_deps(path, known_libs)?,
+                self.create_deps(path, known_libs, extra_search_paths)?,
             )?));
         }
 
@@ -115,7 +133,7 @@ impl Factory for NodeFactory {
             return Ok(Some(Node::new(
                 path.clone(),
                 get_prefix_pkg(path, &self.site_pkgs.stdlib, &self.version)?,
-                self.create_deps(path, known_libs)?,
+                self.create_deps(path, known_libs, extra_search_paths)?,
             )?));
         }
 
@@ -124,7 +142,7 @@ impl Factory for NodeFactory {
                 return Ok(Some(Node::new(
                     path.clone(),
                     get_site_packages_pkg(path, site_pkg, alias, &self.version)?,
-                    self.create_deps(path, known_libs)?,
+                    self.create_deps(path, known_libs, extra_search_paths)?,
                 )?));
             }
         }
@@ -141,7 +159,7 @@ impl Factory for NodeFactory {
             Pkg::Binary {
                 sha: make_digest(path)?,
             },
-            self.create_deps(path, known_libs)?,
+            self.create_deps(path, known_libs, extra_search_paths)?,
         )?))
     }
 
@@ -149,7 +167,7 @@ impl Factory for NodeFactory {
         Node::new(
             path.clone(),
             Pkg::Executable,
-            self.create_deps(path, &HashMap::new())?,
+            self.create_deps(path, &HashMap::new(), &Vec::new())?,
         )
     }
 }
