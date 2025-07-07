@@ -110,8 +110,8 @@ impl Factory for NodeFactory {
         extra_search_paths: &Vec<PathBuf>,
     ) -> Result<Option<Node>> {
         let p = normalize_path(path);
-        if self.should_skip(path) {
-            info!("skip: {}", path.display());
+        if self.should_skip(&p) {
+            info!("skip: {}", p.display());
             return Ok(None);
         }
         if !p.exists() {
@@ -123,43 +123,43 @@ impl Factory for NodeFactory {
 
         if p.starts_with(&self.site_pkgs.lib_dynload) {
             return Ok(Some(Node::new(
-                path.clone(),
-                get_exec_prefix_pkg(path, &self.site_pkgs.lib_dynload, &self.version)?,
-                self.create_deps(path, known_libs, extra_search_paths)?,
+                p.clone(),
+                get_exec_prefix_pkg(&p, &self.site_pkgs.lib_dynload, &self.version)?,
+                self.create_deps(&p, known_libs, extra_search_paths)?,
             )?));
         }
 
         if p.starts_with(&self.site_pkgs.stdlib) {
             return Ok(Some(Node::new(
-                path.clone(),
-                get_prefix_pkg(path, &self.site_pkgs.stdlib, &self.version)?,
-                self.create_deps(path, known_libs, extra_search_paths)?,
+                p.clone(),
+                get_prefix_pkg(&p, &self.site_pkgs.stdlib, &self.version)?,
+                self.create_deps(&p, known_libs, extra_search_paths)?,
             )?));
         }
 
         for (site_pkg, alias) in &self.site_pkgs.site_pkg_by_alias {
             if p.starts_with(site_pkg) {
                 return Ok(Some(Node::new(
-                    path.clone(),
-                    get_site_packages_pkg(path, site_pkg, alias, &self.version)?,
-                    self.create_deps(path, known_libs, extra_search_paths)?,
+                    p.clone(),
+                    get_site_packages_pkg(&p, site_pkg, alias, &self.version)?,
+                    self.create_deps(&p, known_libs, extra_search_paths)?,
                 )?));
             }
         }
 
-        if !is_shared_library(path) {
+        if !is_shared_library(&p) {
             bail!(
                 "found a path which is not inside site packages and is not a shared library. Only plain files inside site-packages are allowed, path={}",
-                path.display()
+                p.display()
             );
         }
 
         Ok(Some(Node::new(
-            path.clone(),
+            p.clone(),
             Pkg::Binary {
-                sha: make_digest(path)?,
+                sha: make_digest(&p)?,
             },
-            self.create_deps(path, known_libs, extra_search_paths)?,
+            self.create_deps(&p, known_libs, extra_search_paths)?,
         )?))
     }
 

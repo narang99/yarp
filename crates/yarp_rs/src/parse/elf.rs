@@ -11,6 +11,7 @@ pub fn parse(
     cwd: &PathBuf,
     env: &HashMap<String, String>,
     extra_rpaths: &Vec<PathBuf>,
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Elf> {
     let ld_preload = split_colon_separated_into_valid_search_paths(env.get("LD_PRELOAD"));
     let ld_library_path = split_colon_separated_into_valid_search_paths(env.get("LD_LIBRARY_PATH"));
@@ -24,6 +25,7 @@ pub fn parse(
         &ld_preload,
         &ld_library_path,
         extra_rpaths,
+        known_libs,
     )
 }
 
@@ -36,6 +38,7 @@ fn do_parse(
     ld_preload: &Vec<PathBuf>,
     ld_library_path: &Vec<PathBuf>,
     extra_rpaths: &Vec<PathBuf>,
+    known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Elf> {
     let dt_rpaths = resolve_rpaths(&rpaths, object_path)?;
     let dt_runpaths = resolve_rpaths(&runpaths, object_path)?;
@@ -56,11 +59,15 @@ fn do_parse(
             cwd,
         ) {
             None => {
-                bail!(
-                    "failed in finding dependency {} for library at path={}",
-                    lib,
-                    object_path.display()
-                );
+                if let Some(known_path) = known_libs.get(lib) {
+                    dt_needed.insert(lib.to_string(), known_path.clone());
+                } else {
+                    bail!(
+                        "failed in finding dependency {} for library at path={}",
+                        lib,
+                        object_path.display()
+                    );
+                }
             }
             Some(path) => {
                 dt_needed.insert(lib.to_string(), path);

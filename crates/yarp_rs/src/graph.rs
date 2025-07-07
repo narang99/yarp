@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::Display, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use bimap::BiHashMap;
+use log::info;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{factory::Factory, node::Node};
@@ -92,38 +93,39 @@ impl<T: Factory> FileGraph<T> {
         replace: bool,
         search_paths: &Vec<PathBuf>,
     ) -> Result<NodeIndex> {
-        let path = node.path.clone();
-        let idx = self.add_node(node, replace);
-        let node = self
-            .path_by_node
-            .get(&path)
-            .with_context(|| {
-                anyhow!(
-                    "fatal: expected node to be present for path={}",
-                    path.display()
-                )
-            })
-            .unwrap();
-
         let deps = node.deps.find()?;
 
         let extra_search_paths = node.deps.paths_to_add_for_next_search();
         let mut search_paths = search_paths.clone();
         search_paths.extend(extra_search_paths);
 
+        let mut all_parent_idx = Vec::new();
         for p in deps {
+            if let Some(_) = self.get_node_by_path(&p) {
+                // exists, continue
+                continue;
+            }
             let parent_node = self.get_or_create_node(&p, known_libs, &search_paths)?;
             if let Some(parent_node) = parent_node {
+                info!("adding node recursively in graph, path={}", p.display());
                 let parent_idx = self
                     .add_tree(parent_node, known_libs, false, &search_paths)
                     .context(anyhow!("file: {}", p.display()))?;
-                self.inner.add_edge(parent_idx, idx, ());
-                if !self.inner.contains_edge(parent_idx, idx) {
-                    self.inner.add_edge(parent_idx, idx, ());
-                }
+                all_parent_idx.push(parent_idx);
+                // self.inner.add_edge(parent_idx, idx, ());
+                // if !self.inner.contains_edge(parent_idx, idx) {
+                //     self.inner.add_edge(parent_idx, idx, ());
+                // }
             }
         }
 
+        let idx = self.add_node(node, replace);
+        for parent_idx in all_parent_idx {
+            self.inner.add_edge(parent_idx, idx, ());
+            if !self.inner.contains_edge(parent_idx, idx) {
+                self.inner.add_edge(parent_idx, idx, ());
+            }
+        }
         Ok(idx)
     }
 

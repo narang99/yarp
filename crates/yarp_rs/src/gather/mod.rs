@@ -3,7 +3,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Error, Result, anyhow, bail};
-use log::info;
+use log::{error, info};
 use walkdir::WalkDir;
 
 pub use crate::factory::NodeFactory;
@@ -13,7 +13,7 @@ use crate::{
     factory::Factory,
     graph::FileGraph,
     manifest::{LoadKind, YarpManifest},
-    node::Node,
+    node::{Node, deps::Deps},
     site_pkgs::SitePkgs,
 };
 
@@ -67,8 +67,24 @@ fn build_graph(
         .unwrap()
         .deps
         .paths_to_add_for_next_search();
+    let trypath = PathBuf::from(
+        "/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/cv2/cv2.cpython-39-x86_64-linux-gnu.so",
+    );
 
-
+    factory
+        .make(&trypath, &known_libs, &executable_extra_paths_to_search)
+        .and_then(|n| {
+            add_to_graph_if_some(
+                &mut g,
+                n,
+                &known_libs,
+                true,
+                &executable_extra_paths_to_search,
+            )
+        })?;
+    for n in g.iter_nodes() {
+        println!("cv2 nodeee {}", n.path.display());
+    }
     // now add all loads, in the correct order, again, should not fail
     for l in &manifest.loads {
         info!(
@@ -208,6 +224,10 @@ fn add_failures(
                 .into_iter()
                 .map(|(_, e)| format!("{:#}", e))
                 .collect();
+            error!("known libs:");
+            for (lib, path) in known_libs.iter() {
+                error!("{}: {}", lib, path.display());
+            }
             bail!(
                 "fatal failure in gather, could not find the dependencies of libraries. Errors:\n{}",
                 errors.join("\n\n")
@@ -242,11 +262,24 @@ fn add_nodes_recursive(
     let total = paths.len();
 
     for p in paths {
+        if !replace {
+            if let Some(_) = g.get_node_by_path(&p) {
+                // skip already done
+                continue;
+            }
+        }
         let res = factory
             .make(&p, known_libs, extra_search_paths)
             .and_then(|n| add_to_graph_if_some(g, n, known_libs, replace, extra_search_paths));
         if let Err(_) = res {
-            failures.push(p);
+            // this is a hack
+            // TODO: if the load is already successful before and we are retrying to reload it, we give up and use the older one
+            // if there is a shared library inside site-packages which is `dlopen`ed, it should ideally be kept in the library path
+            // and also be symlinked to the destination inside site-packages
+            // we won't need to rewrite stuff if we do that (replace=False), we actually wont even try making this node
+            if let None = g.get_node_by_path(&p) {
+                failures.push(p);
+            }
         }
         i += 1;
         if i % (total / 10) == 0 {
@@ -275,11 +308,18 @@ fn add_to_graph_if_some(
 fn get_libs_from_graph(g: &FileGraph<NodeFactory>) -> HashMap<String, PathBuf> {
     let mut known_libs = HashMap::new();
     for n in g.iter_nodes() {
-        n.path
-            .file_name()
-            .and_then(|file_name| file_name.to_str())
-            .map(|f| f.to_string())
-            .map(|f| known_libs.insert(f, n.path.clone()));
+        match n.deps {
+            Deps::Plain => {}
+            Deps::Binary(_) => {
+                n.path
+                    .file_name()
+                    .and_then(|file_name| file_name.to_str())
+                    .map(|f| f.to_string())
+                    .map(|f| known_libs.insert(f, n.path.clone()));
+            }
+            #[cfg(test)]
+            Deps::Mock { paths: _ } => {}
+        };
     }
     known_libs
 }

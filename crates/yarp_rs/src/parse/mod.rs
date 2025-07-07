@@ -36,7 +36,7 @@ pub fn parse_and_search(
                 warn!("found an ELF file in non-linux system, path={}", path.display());
                 return Err(Error::new(BinaryParseError::UnsupportedArchitecture));
             }
-            let elf = parse_linux(elf, path, cwd, env, extra_rpaths)?;
+            let elf = parse_linux(elf, path, cwd, env, extra_rpaths, known_libs)?;
             Binary::Elf(elf)
         }
         Some(lief::Binary::MachO(macho)) => {
