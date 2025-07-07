@@ -81,6 +81,7 @@ mod test {
 {
     "loads": [
         {
+            "kind": "dlopen",
             "path": "/users/hariomnarang/miniconda3/lib/libpango.so",
             "symlinks": ["pango"]
         }

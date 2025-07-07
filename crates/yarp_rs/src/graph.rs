@@ -5,21 +5,23 @@ use bimap::BiHashMap;
 use petgraph::{Direction::Incoming, Graph, algo::toposort, graph::NodeIndex, visit::EdgeRef};
 
 use crate::{
+    gather::{Factory, NodeFactory},
     manifest::Env,
     node::{Node, Pkg, deps::Deps},
 };
 
 #[derive(Debug)]
-pub struct FileGraph {
+pub struct FileGraph<T: Factory> {
     executable_path: PathBuf,
     cwd: PathBuf,
     inner: Graph<(), ()>,
     idx_by_path: BiHashMap<NodeIndex, PathBuf>,
     path_by_node: HashMap<PathBuf, Node>,
     env: Env,
+    factory: T,
 }
 
-impl Display for FileGraph {
+impl<T: Factory> Display for FileGraph<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for node_idx in self.inner.node_indices() {
             let path = self
@@ -42,8 +44,8 @@ impl Display for FileGraph {
     }
 }
 
-impl FileGraph {
-    pub fn new(executable_path: PathBuf, cwd: PathBuf, env: Env) -> Self {
+impl<T: Factory> FileGraph<T> {
+    pub fn new(executable_path: PathBuf, cwd: PathBuf, env: Env, factory: T) -> Self {
         Self {
             inner: Graph::new(),
             idx_by_path: BiHashMap::new(),
@@ -51,6 +53,7 @@ impl FileGraph {
             executable_path,
             cwd,
             env,
+            factory,
         }
     }
 
@@ -129,15 +132,7 @@ impl FileGraph {
         match self.path_by_node.get(path) {
             Some(node) => Ok(node.clone()),
             None => {
-                let pkg = Pkg::from_path(path);
-                let deps = Deps::from_path(
-                    path,
-                    &self.executable_path,
-                    &self.cwd,
-                    &self.env,
-                    &known_libs,
-                )?;
-                Node::new(path.clone(), pkg, deps)
+                self.factory.make(path, known_libs)
             }
         }
     }
@@ -191,22 +186,40 @@ impl FileGraph {
 #[cfg(test)]
 mod test {
 
+    use crate::{gather::NodeSpec};
+
     use super::*;
 
-    use std::{
-        path::PathBuf,
-        str::FromStr,
-    };
+    use std::{path::PathBuf, str::FromStr};
+
+    struct MockFactory {}
+
+    impl Factory for MockFactory {
+        fn make(&self, path: &PathBuf, known_libs: &HashMap<String, PathBuf>) -> Result<Node> {
+            Node::mock(path.clone(), Vec::new())
+        }
+        fn make_with_symlinks(
+            &self,
+            path: &PathBuf,
+            symlinks: &Vec<String>,
+            known_libs: &HashMap<String, PathBuf>,
+        ) -> Result<Node> {
+            Node::mock(path.clone(), Vec::new())
+        }
+        fn make_spec(&self, path: &PathBuf) -> Result<NodeSpec> {
+            Ok(NodeSpec::Binary { path: path.clone() })
+        }
+    }
 
     fn create_temp_dir() -> tempfile::TempDir {
         tempfile::tempdir().expect("failed to create temp dir")
     }
 
-    fn get_graph() -> FileGraph {
+    fn get_graph() -> FileGraph<MockFactory> {
         let tmp = create_temp_dir();
         let executable_path = touch_path(&tmp, "python");
         let cwd = PathBuf::from_str(".").unwrap();
-        FileGraph::new(executable_path, cwd, HashMap::new())
+        FileGraph::new(executable_path, cwd, HashMap::new(), MockFactory {})
     }
 
     #[test]

@@ -14,6 +14,8 @@ pub mod node;
 pub mod paths;
 pub mod pkg;
 pub mod parse;
+pub mod factory;
+pub mod site_pkgs;
 
 /**
  * Algorithm:

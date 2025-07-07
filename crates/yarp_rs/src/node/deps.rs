@@ -1,14 +1,22 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use anyhow::Result;
 
-pub mod core;
+use crate::parse::BinaryParseError;
 
-// TODO: remove and move this, no need for two identifiers
-pub use core::Deps;
+use crate::parse::Binary;
 
-use crate::parse::{BinaryParseError};
-// use crate::node::deps::{core::BinaryParseError, macho::get_deps_from_macho};
+#[derive(Debug, Clone)]
+pub enum Deps {
+    Plain,
+    Binary(Binary),
+
+    #[cfg(test)]
+    Mock {
+        paths: Vec<PathBuf>,
+    },
+}
 
 impl Deps {
     pub fn new_binary(
@@ -18,7 +26,14 @@ impl Deps {
         env: &HashMap<String, String>,
         known_libs: &HashMap<String, PathBuf>,
     ) -> Result<Deps> {
-        let bin = crate::parse::parse_and_search(path, executable_path, cwd, env, known_libs, &Vec::new());
+        let bin = crate::parse::parse_and_search(
+            path,
+            executable_path,
+            cwd,
+            env,
+            known_libs,
+            &Vec::new(),
+        );
         match bin {
             Ok(bin) => Ok(Deps::Binary(bin)),
             Err(e) => {

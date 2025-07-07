@@ -4,42 +4,11 @@ use anyhow::{Result, anyhow};
 use pathdiff::diff_paths;
 
 use crate::{
+    factory::core::NodeSpec,
     manifest::Version,
     node::{Node, Pkg, PkgSitePackages, PrefixPackages, deps::Deps},
     pkg::paths::is_shared_library,
 };
-
-#[derive(Debug, Clone)]
-pub enum NodeSpec {
-    Executable {
-        path: PathBuf,
-    },
-    ExecPrefixPkg {
-        original_prefix: PathBuf,
-        alias: String,
-        version: Version,
-        path: PathBuf,
-    },
-    PrefixPkg {
-        original_prefix: PathBuf,
-        alias: String,
-        version: Version,
-        path: PathBuf,
-    },
-    SitePkg {
-        site_pkg_path: PathBuf,
-        alias: String,
-        version: Version,
-        path: PathBuf,
-    },
-    BinaryInLdPath {
-        path: PathBuf,
-        symlinks: Vec<String>,
-    },
-    Binary {
-        path: PathBuf,
-    }
-}
 
 pub fn generate_node(
     payload: &NodeSpec,
@@ -48,41 +17,24 @@ pub fn generate_node(
     env: &HashMap<String, String>,
     known_libs: &HashMap<String, PathBuf>,
 ) -> Result<Node> {
-    let make_node = |pkg, path| {
-        mk_node(
-            path,
-            executable_path,
-            cwd,
-            env,
-            pkg,
-            known_libs,
-        )
-    };
+    let make_node = |pkg, path| mk_node(path, executable_path, cwd, env, pkg, known_libs);
     match payload {
         NodeSpec::Executable { path } => {
-            let deps = Deps::new_binary(
-                executable_path,
-                executable_path,
-                cwd,
-                env,
-                known_libs,
-            )?;
+            let deps = Deps::new_binary(executable_path, executable_path, cwd, env, known_libs)?;
             Node::new(path.clone(), Pkg::Executable, deps)
         }
         NodeSpec::ExecPrefixPkg {
             path,
             original_prefix,
-            alias,
             version,
-        } => get_exec_prefix_pkg(path, original_prefix, alias, version)
-            .and_then(|pkg| make_node(pkg, path)),
+        } => {
+            get_exec_prefix_pkg(path, original_prefix, version).and_then(|pkg| make_node(pkg, path))
+        }
         NodeSpec::PrefixPkg {
             path,
             original_prefix,
-            alias,
             version,
-        } => get_prefix_pkg(path, original_prefix, alias, version)
-            .and_then(|pkg| make_node(pkg, path)),
+        } => get_prefix_pkg(path, original_prefix, version).and_then(|pkg| make_node(pkg, path)),
         NodeSpec::SitePkg {
             path,
             site_pkg_path,
@@ -92,7 +44,9 @@ pub fn generate_node(
             .and_then(|pkg| make_node(pkg, path)),
         NodeSpec::BinaryInLdPath { path, symlinks } => Node::new(
             path.clone(),
-            Pkg::BinaryInLDPath { symlinks: symlinks.clone() },
+            Pkg::BinaryInLDPath {
+                symlinks: symlinks.clone(),
+            },
             Deps::new_binary(&path, executable_path, cwd, env, known_libs)?,
         ),
         NodeSpec::Binary { path } => Node::new(
@@ -118,7 +72,6 @@ fn mk_node(
 fn get_exec_prefix_pkg(
     path: &PathBuf,
     original_prefix: &PathBuf,
-    _alias: &str,
     version: &Version,
 ) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
@@ -140,12 +93,7 @@ fn get_exec_prefix_pkg(
     }
 }
 
-fn get_prefix_pkg(
-    path: &PathBuf,
-    original_prefix: &PathBuf,
-    _alias: &str,
-    version: &Version,
-) -> Result<Pkg> {
+fn get_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, version: &Version) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
         anyhow!(
             "failed in finding relative path of file inside prefix file={} prefix={}",

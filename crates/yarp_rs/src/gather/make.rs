@@ -1,19 +1,17 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use log::info;
 use rayon::current_thread_index;
 
 use crate::{
-    gather::node_factory::{NodeSpec, generate_node},
-    manifest::YarpManifest,
+    factory::NodeSpec,
+    gather::{Factory, NodeFactory},
     node::Node,
 };
 
 pub fn mk_nodes_parallel(
     node_specs: &Vec<NodeSpec>,
-    manifest: &YarpManifest,
-    cwd: &PathBuf,
-    env: &HashMap<String, String>,
+    factory: &NodeFactory,
 ) -> (Vec<Node>, Vec<NodeSpec>) {
     use rayon::prelude::*;
 
@@ -37,13 +35,7 @@ pub fn mk_nodes_parallel(
             let mut i = 0;
             let total = chunk.len();
             for payload in chunk {
-                let node = generate_node(
-                    payload,
-                    &manifest.python.sys.executable,
-                    cwd,
-                    env,
-                    &empty_known_libs,
-                );
+                let node = factory.make_from_spec(payload, &empty_known_libs);
                 match node {
                     Ok(node) => {
                         local_res.push(node);

@@ -8,35 +8,40 @@ use rand::{Rng, rng};
 use walkdir::WalkDir;
 
 mod make;
-mod node_factory;
-mod site_pkgs_comp;
-pub use site_pkgs_comp::PythonPathComponent;
+pub use crate::factory::{Factory, NodeFactory, NodeSpec};
+pub use crate::site_pkgs::PythonPathComponent;
 
 use crate::{
-    gather::{
-        make::mk_nodes_parallel,
-        node_factory::{NodeSpec, generate_node},
-        site_pkgs_comp::get_python_path_mapping,
-    },
+    gather::make::mk_nodes_parallel,
     graph::FileGraph,
     manifest::{Env, Skip, Sys, Version, YarpManifest},
     node::{Node, deps::Deps},
     paths::is_sys_lib,
+    site_pkgs::SitePkgs,
 };
 
 pub fn build_graph_from_manifest(
     manifest: &Box<YarpManifest>,
     cwd: &PathBuf,
-) -> Result<(FileGraph, Vec<PythonPathComponent>)> {
-    let (nodes, path_components, mut known_libs) = get_python_universe(manifest, cwd)?;
+) -> Result<(FileGraph<NodeFactory>, Vec<PythonPathComponent>)> {
+    let site_pkgs = SitePkgs::from_manifest(manifest);
+    let factory = NodeFactory::new(
+        site_pkgs.clone(),
+        manifest.python.sys.version.clone(),
+        manifest.python.sys.executable.clone(),
+        cwd.clone(),
+        manifest.env.clone(),
+    );
+    let (nodes, mut known_libs) = get_python_universe(manifest, cwd, &site_pkgs, &factory)?;
     let g = build_graph(
         nodes,
         manifest.python.sys.executable.clone(),
         cwd.clone(),
         manifest.env.clone(),
         &mut known_libs,
+        factory,
     )?;
-    Ok((g, path_components))
+    Ok((g, site_pkgs.comps))
 }
 
 fn build_graph(
@@ -45,14 +50,15 @@ fn build_graph(
     cwd: PathBuf,
     env: Env,
     known_libs: &mut HashMap<String, PathBuf>,
-) -> Result<FileGraph> {
+    factory: NodeFactory,
+) -> Result<FileGraph<NodeFactory>> {
     info!(
         "building graph, number of nodes={} executable_path={} cwd={}",
         nodes.len(),
         executable_path.display(),
         cwd.display()
     );
-    let mut g = FileGraph::new(executable_path, cwd, env);
+    let mut g = FileGraph::new(executable_path, cwd, env, factory);
     info!("Build graph: pass 1, begin");
     let mut failures = Vec::new();
 
@@ -107,14 +113,12 @@ fn build_graph(
 pub fn get_python_universe(
     manifest: &YarpManifest,
     cwd: &PathBuf,
-) -> Result<(
-    Vec<Node>,
-    Vec<PythonPathComponent>,
-    HashMap<String, PathBuf>,
-)> {
+    site_pkgs: &SitePkgs,
+    factory: &NodeFactory,
+) -> Result<(Vec<Node>, HashMap<String, PathBuf>)> {
     info!("gather files: Pass 1, begin");
-    let (create_nodes, py_comps) = get_node_specs(manifest)?;
-    let (mut res, failures) = mk_nodes_parallel(&create_nodes, manifest, cwd, &manifest.env);
+    let create_nodes = get_node_specs(manifest, &factory, &site_pkgs)?;
+    let (mut res, failures) = mk_nodes_parallel(&create_nodes, factory);
 
     info!(
         "gather files: Pass 2, begin, number of nodes to pass again: {}",
@@ -122,20 +126,14 @@ pub fn get_python_universe(
     );
     let mut known_libs = get_libs_scanned_in_nodes(&res)?;
     for payload in failures {
-        let node = generate_node(
-            &payload,
-            &manifest.python.sys.executable,
-            cwd,
-            &manifest.env,
-            &known_libs,
-        )?;
+        let node = factory.make_from_spec(&payload, &known_libs)?;
         let (file_name, path) = get_lib_from_node(&node)?;
         known_libs.insert(file_name, path);
 
         res.push(node);
     }
     info!("gather files done");
-    Ok((res, py_comps, known_libs))
+    Ok((res, known_libs))
 }
 
 fn should_skip(path: &PathBuf, skip: &Skip) -> bool {
@@ -173,38 +171,31 @@ fn get_lib_from_node(node: &Node) -> Result<(String, PathBuf)> {
     Ok((file_name.to_string(), node.path.clone()))
 }
 
-fn get_node_specs(manifest: &YarpManifest) -> Result<(Vec<NodeSpec>, Vec<PythonPathComponent>)> {
+fn get_node_specs(
+    manifest: &YarpManifest,
+    factory: &NodeFactory,
+    site_pkgs: &SitePkgs,
+) -> Result<Vec<NodeSpec>> {
     let mut res = Vec::new();
     let sys = &manifest.python.sys;
-    let lib_dynload_path = get_lib_dynload_loc(sys);
 
     res.push(NodeSpec::Executable {
         path: sys.executable.clone(),
     });
 
     res.extend(get_node_specs_recursive(
-        &lib_dynload_path,
-        &sys.version,
-        &random_string(),
-        CreateNodeToMake::ExecPrefix,
+        &site_pkgs.lib_dynload,
+        &factory,
         &manifest.skip,
     )?);
 
-    let stdlib_path = get_stdlib_loc(sys);
     res.extend(get_node_specs_recursive(
-        &stdlib_path,
-        &sys.version,
-        &random_string(),
-        CreateNodeToMake::Prefix,
+        &site_pkgs.stdlib,
+        &factory,
         &manifest.skip,
     )?);
 
-    // do site-packages in the end
-    let site_pkgs = get_site_pkgs_without_prefixes(&sys.path, &lib_dynload_path, &stdlib_path);
-    let site_pkgs = only_top_level_site_pkgs(&site_pkgs, &lib_dynload_path, &stdlib_path);
-    let site_pkg_by_alias = create_site_pkgs_alias(&site_pkgs);
-
-    for site_pkg in &site_pkgs {
+    for site_pkg in &site_pkgs.resolved {
         if !site_pkg.exists() {
             // its valid for a pythonpath to not exist
             info!(
@@ -213,16 +204,9 @@ fn get_node_specs(manifest: &YarpManifest) -> Result<(Vec<NodeSpec>, Vec<PythonP
             );
             continue;
         }
-        info!(
-            "gather: site-package={} alias={:?}",
-            site_pkg.display(),
-            site_pkg_by_alias.get(site_pkg)
-        );
         res.extend(get_node_specs_recursive(
             site_pkg,
-            &sys.version,
-            site_pkg_by_alias.get(site_pkg).expect(&format!("fatal: could not find alias for site-packages, site_pkg={:?} site-packages-map={:?}", site_pkg, site_pkg_by_alias)),
-            CreateNodeToMake::SitePkg,
+            &factory,
             &manifest.skip,
         )?);
     }
@@ -247,34 +231,12 @@ fn get_node_specs(manifest: &YarpManifest) -> Result<(Vec<NodeSpec>, Vec<PythonP
             path: p.path.clone(),
         });
     }
-    let py_path_comps = get_python_path_mapping(
-        &site_pkg_by_alias,
-        &stdlib_path,
-        &lib_dynload_path,
-        &sys.path,
-    );
-    Ok((res, py_path_comps))
-}
-
-fn create_site_pkgs_alias(site_pkgs: &Vec<PathBuf>) -> HashMap<PathBuf, String> {
-    let mut site_pkg_aliases = std::collections::HashMap::new();
-    for site_pkg in site_pkgs {
-        site_pkg_aliases.insert(site_pkg.clone(), random_string());
-    }
-    site_pkg_aliases
-}
-
-enum CreateNodeToMake {
-    SitePkg,
-    Prefix,
-    ExecPrefix,
+    Ok(res)
 }
 
 fn get_node_specs_recursive(
     directory: &PathBuf,
-    version: &Version,
-    alias: &String,
-    to_make: CreateNodeToMake,
+    factory: &NodeFactory,
     skip: &Skip,
 ) -> Result<Vec<NodeSpec>> {
     if !directory.exists() {
@@ -289,98 +251,9 @@ fn get_node_specs_recursive(
         if should_skip(&p, skip) {
             continue;
         }
-        let create_node = match to_make {
-            CreateNodeToMake::Prefix => NodeSpec::PrefixPkg {
-                original_prefix: directory.clone(),
-                alias: alias.clone(),
-                version: version.clone(),
-                path: p.clone(),
-            },
-            CreateNodeToMake::ExecPrefix => NodeSpec::ExecPrefixPkg {
-                original_prefix: directory.clone(),
-                alias: alias.clone(),
-                version: version.clone(),
-                path: p.clone(),
-            },
-            CreateNodeToMake::SitePkg => NodeSpec::SitePkg {
-                site_pkg_path: directory.clone(),
-                alias: alias.clone(),
-                version: version.clone(),
-                path: p.clone(),
-            },
-        };
-        nodes.push(create_node);
+        nodes.push(factory.make_spec(&p)?);
     }
     Ok(nodes)
-}
-
-fn get_lib_dynload_loc(sys: &Sys) -> PathBuf {
-    sys.exec_prefix
-        .join(&sys.platlibdir)
-        .join(sys.version.get_python_version())
-        .join("lib-dynload")
-}
-
-fn get_stdlib_loc(sys: &Sys) -> PathBuf {
-    sys.prefix
-        .join(&sys.platlibdir)
-        .join(sys.version.get_python_version())
-}
-
-fn get_site_pkgs_without_prefixes(
-    site_pkgs: &Vec<PathBuf>,
-    lib_dynload: &PathBuf,
-    stdlib: &PathBuf,
-) -> Vec<PathBuf> {
-    site_pkgs
-        .iter()
-        .filter(|p| **p != *lib_dynload)
-        .filter(|p| **p != *stdlib)
-        .map(|p| p.clone())
-        .collect()
-}
-
-fn only_top_level_site_pkgs(
-    sys_path: &Vec<PathBuf>,
-    lib_dynload: &PathBuf,
-    stdlib: &PathBuf,
-) -> Vec<PathBuf> {
-    let mut all_paths_to_check: Vec<&PathBuf> = sys_path.iter().collect();
-    all_paths_to_check.push(lib_dynload);
-    all_paths_to_check.push(stdlib);
-
-    sys_path
-        .iter()
-        .filter(|p| {
-            let should_keep = !is_sub_path_of_other_pkgs(p, &all_paths_to_check);
-            if !should_keep {
-                info!("package {} is a nested site-package, ignoring", p.display());
-            }
-            should_keep
-        })
-        .map(|p| p.clone())
-        .collect()
-}
-
-fn is_sub_path_of_other_pkgs(p: &PathBuf, sys_path: &Vec<&PathBuf>) -> bool {
-    for other in sys_path {
-        if *p != **other && p.starts_with(other) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn random_string() -> String {
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-    let mut rng = rng();
-
-    (0..10)
-        .map(|_| {
-            let idx = rng.random_range(0..CHARSET.len());
-            CHARSET[idx] as char
-        })
-        .collect()
 }
 
 fn get_paths_recursive_from_dir(base_path: &PathBuf) -> Result<Vec<PathBuf>> {
