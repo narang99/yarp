@@ -68,18 +68,6 @@ fn build_graph(
         .deps
         .paths_to_add_for_next_search();
 
-    println!(
-        "python executableeeeeeeEE: extra search paths: {:?}",
-        executable_extra_paths_to_search
-    );
-
-    g.add_tree(
-        factory.make(
-            &PathBuf::from("/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/torch/_C.cpython-39-x86_64-linux-gnu.so"),
-            &known_libs,
-            &executable_extra_paths_to_search,
-        ).unwrap().unwrap(), &known_libs, false, &executable_extra_paths_to_search,
-    ).unwrap();
 
     // now add all loads, in the correct order, again, should not fail
     for l in &manifest.loads {

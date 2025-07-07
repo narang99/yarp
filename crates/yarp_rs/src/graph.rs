@@ -108,9 +108,6 @@ impl<T: Factory> FileGraph<T> {
         let deps = node.deps.find()?;
 
         let extra_search_paths = node.deps.paths_to_add_for_next_search();
-        if extra_search_paths.len() > 0 {
-            println!("addedddddddddddddd extra paths {:?}", extra_search_paths);
-        }
         let mut search_paths = search_paths.clone();
         search_paths.extend(extra_search_paths);
 
