@@ -1,6 +1,7 @@
 mod auxval;
 mod ldconfig;
 mod rpath;
+mod ldd;
 
 use std::path::PathBuf;
 
@@ -64,6 +65,10 @@ pub fn search(
             PathBuf::from("/usr/lib")
         ]
     );
+
+    if let Ok(path) = ldd::find(name) {
+        return Some(path)
+    }
 
     None
 }

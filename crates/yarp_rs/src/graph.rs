@@ -101,21 +101,18 @@ impl<T: Factory> FileGraph<T> {
 
         let mut all_parent_idx = Vec::new();
         for p in deps {
-            if let Some(_) = self.get_node_by_path(&p) {
-                // exists, continue
+            if let Some(parent_idx) = self.idx_by_path.get_by_right(&p) {
+                println!("parent index exists");
+                all_parent_idx.push(*parent_idx);
                 continue;
             }
-            let parent_node = self.get_or_create_node(&p, known_libs, &search_paths)?;
+            let parent_node = self.factory.make(&p, known_libs, &search_paths)?;
             if let Some(parent_node) = parent_node {
                 info!("adding node recursively in graph, path={}", p.display());
                 let parent_idx = self
                     .add_tree(parent_node, known_libs, false, &search_paths)
                     .context(anyhow!("file: {}", p.display()))?;
                 all_parent_idx.push(parent_idx);
-                // self.inner.add_edge(parent_idx, idx, ());
-                // if !self.inner.contains_edge(parent_idx, idx) {
-                //     self.inner.add_edge(parent_idx, idx, ());
-                // }
             }
         }
 
@@ -129,17 +126,6 @@ impl<T: Factory> FileGraph<T> {
         Ok(idx)
     }
 
-    fn get_or_create_node(
-        &self,
-        path: &PathBuf,
-        known_libs: &HashMap<String, PathBuf>,
-        search_paths: &Vec<PathBuf>,
-    ) -> Result<Option<Node>> {
-        match self.path_by_node.get(path) {
-            Some(node) => Ok(Some(node.clone())),
-            None => self.factory.make(path, known_libs, search_paths),
-        }
-    }
 
     pub fn get_node_by_path(&self, path: &PathBuf) -> Option<&Node> {
         self.path_by_node.get(path)
@@ -198,20 +184,36 @@ mod test {
 
     use std::path::PathBuf;
 
-    struct MockFactory {}
+    use std::collections::HashMap;
+
+    struct MockFactory {
+        pub path_by_deps: HashMap<PathBuf, Vec<PathBuf>>,
+    }
+
+    impl MockFactory {
+        pub fn new(path_by_deps: HashMap<PathBuf, Vec<PathBuf>>) -> Self {
+            MockFactory { path_by_deps }
+        }
+    }
 
     impl Factory for MockFactory {
         fn make(
             &self,
             path: &PathBuf,
             _known_libs: &HashMap<String, PathBuf>,
-            extra_search_paths: &Vec<PathBuf>,
+            _extra_search_paths: &Vec<PathBuf>,
         ) -> Result<Option<Node>> {
-            Ok(Some(Node::mock(path.clone(), Vec::new())?))
+            let deps = self
+                .path_by_deps
+                .get(path)
+                .cloned()
+                .unwrap_or_else(Vec::new);
+            Ok(Some(Node::mock(path.clone(), deps)?))
         }
 
         fn make_py_executable(&self, path: &PathBuf) -> Result<Node> {
-            Node::mock(path.clone(), Vec::new())
+            self.make(path, &HashMap::new(), &Vec::new())
+                .map(|n| n.unwrap())
         }
 
         fn make_with_symlinks(
@@ -219,25 +221,23 @@ mod test {
             path: &PathBuf,
             _symlinks: &Vec<String>,
             _known_libs: &HashMap<String, PathBuf>,
-            extra_search_paths: &Vec<PathBuf>,
+            _extra_search_paths: &Vec<PathBuf>,
         ) -> Result<Option<Node>> {
-            Ok(Some(Node::mock(path.clone(), Vec::new())?))
+            self.make(path, &HashMap::new(), &Vec::new())
         }
     }
-
     fn create_temp_dir() -> tempfile::TempDir {
         tempfile::tempdir().expect("failed to create temp dir")
     }
 
-    fn get_graph() -> FileGraph<MockFactory> {
-        let tmp = create_temp_dir();
-        FileGraph::new(MockFactory {})
+    fn get_graph(path_by_deps: HashMap<PathBuf, Vec<PathBuf>>) -> FileGraph<MockFactory> {
+        FileGraph::new(MockFactory::new(path_by_deps))
     }
 
     #[test]
     fn test_add_node_single() {
         let tmp = create_temp_dir();
-        let mut graph = get_graph();
+        let mut graph = get_graph(HashMap::new());
         let path = touch_path(&tmp, "python");
         let node = Node::mock(path, vec![]).unwrap();
         let idx = graph
@@ -250,12 +250,13 @@ mod test {
     #[test]
     fn test_add_node_with_dependencies() {
         let tmp = create_temp_dir();
-        let mut graph = get_graph();
 
         let p_lib_test = touch_path(&tmp, "libtest");
         let p_python = touch_path(&tmp, "python");
         let lib_test = Node::mock(p_lib_test.clone(), vec![]).unwrap();
-        let py_node = Node::mock(p_python, vec![p_lib_test]).unwrap();
+        let py_node = Node::mock(p_python.clone(), vec![p_lib_test.clone()]).unwrap();
+
+        let mut graph = get_graph(HashMap::from([(p_python, vec![p_lib_test])]));
 
         graph
             .add_tree(py_node.clone(), &HashMap::new(), false, &Vec::new())
@@ -268,7 +269,7 @@ mod test {
 
     #[test]
     fn test_add_duplicate_node() {
-        let mut graph = get_graph();
+        let mut graph = get_graph(HashMap::new());
 
         let tmp = create_temp_dir();
         let p_python = touch_path(&tmp, "python");
@@ -290,7 +291,6 @@ mod test {
         println!("*************start complex test**********************");
         let tmp = create_temp_dir();
 
-        let mut graph = get_graph();
 
         let dep2_path = touch_path(&tmp, "dep2.py");
         let dep2 = Node::mock(dep2_path.clone(), vec![]).unwrap();
@@ -302,12 +302,15 @@ mod test {
         let dep3 = Node::mock(dep3_path.clone(), vec![dep2_path.clone()]).unwrap();
 
         let main_path = touch_path(&tmp, "python");
-        let main = Node::mock(main_path, vec![dep1_path, dep3_path]).unwrap();
+        let main = Node::mock(main_path.clone(), vec![dep1_path.clone(), dep3_path.clone()]).unwrap();
 
-        graph.add_node(main.clone(), false);
-        graph.add_node(dep1.clone(), false);
-        graph.add_node(dep2.clone(), false);
-        graph.add_node(dep3.clone(), false);
+        let path_by_deps = HashMap::from([
+            (main_path, vec![dep1_path.clone(), dep3_path.clone()]),
+            (dep1_path, vec![dep2_path.clone()]),
+            (dep3_path, vec![dep2_path.clone()]),
+            (dep2_path, vec![]),
+        ]);
+        let mut graph = get_graph(path_by_deps);
 
         let result = graph.add_tree(main.clone(), &HashMap::new(), false, &Vec::new());
         println!("*************end complex adding**********************");
