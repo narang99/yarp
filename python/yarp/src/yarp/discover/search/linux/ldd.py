@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 
-def find(name: str) -> Optional[Path]:
+def ldd_find(name: str) -> Optional[Path]:
     """
     Find a library using ldd command.
     
