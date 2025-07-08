@@ -2,7 +2,7 @@
 
 use std::{path::PathBuf, process::Command, str::FromStr};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 pub fn find(name: &str) -> Result<PathBuf> {
     let output = Command::new("ldd")
@@ -19,7 +19,7 @@ pub fn find(name: &str) -> Result<PathBuf> {
             } else {
                 bail!("path does not exist")
             }
-        },
+        }
         Err(e) => Err(e),
     }
 }
@@ -45,12 +45,13 @@ fn find_in_output(name: &str, output: String) -> Option<PathBuf> {
     */
 
     for line in output.lines() {
+        if !line.contains("=>") {
+            continue;
+        }
         let parts: Vec<&str> = line.trim().split("=>").map(|p| p.trim()).collect();
-        if parts.len() > 1 {
-            if name == parts[0] {
-                if let Some(result) = find_in_ldd_entry_value(parts[1]) {
-                    return Some(result);
-                }
+        if parts.len() > 1 && name == parts[0] {
+            if let Some(result) = find_in_ldd_entry_value(parts[1]) {
+                return Some(result);
             }
         }
     }
