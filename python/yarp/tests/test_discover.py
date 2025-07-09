@@ -1,7 +1,6 @@
 from yarp.discover.types import (
-    Modules,
-    Pure,
-    Extension,
+    Lib,
+    Skip,
     YarpDiscovery,
     Load,
     Python,
@@ -31,14 +30,13 @@ def test_yarp_discovery_serialization():
 
     discovery = YarpDiscovery(
         loads=[
-            Load(path="/path/to/load1"),
-            Load(path="/path/to/load2"),
+            Load(path="/path/to/load1", kind="dlopen", symlinks=[]),
+            Load(path="/path/to/load2", kind="extension", symlinks=[]),
         ],
-        modules=Modules(
-            pure=[Pure(name="test_module", path="/path/to/module")],
-            extensions=[Extension(name="test_extension", path="/path/to/extension")],
-        ),
+        env={},
+        libs=[Lib(path="hello")],
         python=python_info,
+        skip=Skip(prefixes=[], libs=[]),
     )
 
     # Serialize the object
@@ -49,12 +47,6 @@ def test_yarp_discovery_serialization():
     assert serialized["loads"][0]["path"] == "/path/to/load1"
     assert serialized["loads"][1]["path"] == "/path/to/load2"
 
-    assert len(serialized["modules"]["pure"]) == 1
-    assert len(serialized["modules"]["extensions"]) == 1
-    assert serialized["modules"]["pure"][0]["name"] == "test_module"
-    assert serialized["modules"]["pure"][0]["path"] == "/path/to/module"
-    assert serialized["modules"]["extensions"][0]["name"] == "test_extension"
-    assert serialized["modules"]["extensions"][0]["path"] == "/path/to/extension"
 
     python_data = serialized["python"]["sys"]
     assert python_data["prefix"] == "/usr/local"
