@@ -7,6 +7,7 @@
 
 use std::path::PathBuf;
 
+use anyhow::{Context, anyhow};
 use lazy_static::lazy_static;
 use log::error;
 use regex::Regex;
@@ -14,6 +15,7 @@ use regex::Regex;
 use crate::{
     manifest::Version,
     node::{Node, Pkg},
+    paths::get_lib_name,
 };
 
 pub trait ExportedFileTree {
@@ -91,10 +93,10 @@ impl ExportedFileTree for Pkg {
             }
             | Pkg::Binary { sha }
             | Pkg::BinaryInLDPath { symlinks: _, sha } => {
-                reals_path_for_sha(&sha, &node.path, dist)
+                reals_path(&sha, &node.path, dist)
             }
             Pkg::PrefixBinary(pkg) | Pkg::ExecPrefixBinary(pkg) => {
-                reals_path_for_sha(&pkg.sha, &node.path, dist)
+                reals_path(&pkg.sha, &node.path, dist)
             }
         }
     }
@@ -114,16 +116,18 @@ impl ExportedFileTree for Pkg {
                 site_packages: _,
                 alias: _,
                 rel_path: _,
-                sha: _,
+                sha,
             }
-            | Pkg::Executable
-            | Pkg::Binary { sha: _ }
+            | Pkg::Binary { sha }
             | Pkg::BinaryInLDPath {
                 symlinks: _,
-                sha: _,
-            }
-            | Pkg::ExecPrefixBinary(_)
-            | Pkg::PrefixBinary(_) => symlink_farm_path(path, dist),
+                sha,
+            } => symlink_farm_path_using_sha(path, dist, sha),
+
+            | Pkg::ExecPrefixBinary(pkgs)
+            | Pkg::PrefixBinary(pkgs) => symlink_farm_path_using_sha(path, dist, &pkgs.sha),
+
+            | Pkg::Executable => symlink_farm_path(path, dist),
         }
     }
 }
@@ -157,8 +161,12 @@ pub fn stdlib_relative_path(version: &Version) -> PathBuf {
         .join(version.get_python_version())
 }
 
-fn reals_path_for_sha(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
+fn reals_path(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
     loose_validate_path_is_file(path);
+    return reals_path_for_sha(sha, path, dist);
+}
+
+fn reals_path_for_sha(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
     let fname = match path.extension() {
         Some(ext) => format!(
             "{}.{}",
@@ -174,23 +182,38 @@ fn reals_path_for_sha(sha: &str, path: &PathBuf, dist: &PathBuf) -> Option<PathB
     Some(reals_dir.join(fname))
 }
 
+fn symlink_farm_path_using_sha(path: &PathBuf, dist: &PathBuf, sha: &str) -> Option<PathBuf> {
+    loose_validate_path_is_file(path);
+    let os = std::env::consts::OS;
+    if os == "macos" || os == "linux" {
+        Some(dist.join("symlinks").join(sha))
+    } else {
+        None
+    }
+}
+
 fn symlink_farm_path(path: &PathBuf, dist: &PathBuf) -> Option<PathBuf> {
     loose_validate_path_is_file(path);
-    let symlinks_farm_dir = dist.join("symlinks");
-    path.file_name()
-        .map(|file_name| symlinks_farm_dir.join(file_name))
+    let os = std::env::consts::OS;
+    if os == "macos" || os == "linux" {
+        let symlinks_farm_dir = dist.join("symlinks");
+        path.file_name()
+            .map(|file_name| symlinks_farm_dir.join(file_name))
+    } else {
+        None
+    }
 }
 
 fn loose_validate_path_is_file(path: &PathBuf) {
     if !path.is_file() {
         if cfg!(debug_assertions) {
             panic!(
-                "got a directory for moving to reals path={}",
+                "got a path which is not a file or does not exist for moving to reals={}",
                 path.display()
             );
         } else {
             error!(
-                "error: found a directory for moving to reals directory, please raise this with the developer, yarp will ignore this path and move on, path={}",
+                "error: found a path which is not a file or does not exist for moving to reals directory, please raise this with the developer, yarp will ignore this path and move on, path={}",
                 path.display()
             );
         }
@@ -198,10 +221,14 @@ fn loose_validate_path_is_file(path: &PathBuf) {
 }
 
 lazy_static! {
-    static ref SONAME_RE: Regex = Regex::new(r"so([.\d]*)$").expect("failed to compiled regex for detecting shared library names");
+    static ref SONAME_RE: Regex = Regex::new(r"\.so([.\da-zA-Z]*)$")
+        .expect("failed to compiled regex for detecting shared library names");
 }
 
-pub fn is_shared_library(path: &PathBuf) -> bool {
+pub fn is_maybe_shared_library(path: &PathBuf) -> bool {
+    // this only checks the path extensions
+    // they are not very reliable
+    // you should try parsing after this to see if they really are a shared library
     match path.to_str() {
         None => false,
         Some(path) => {

@@ -4,9 +4,9 @@ use std::{path::PathBuf, process::Command, str::FromStr};
 
 use anyhow::{Context, Result, bail};
 
-pub fn find(name: &str) -> Result<PathBuf> {
+pub fn find(name: &str, object_path: &PathBuf) -> Result<PathBuf> {
     let output = Command::new("ldd")
-        .arg("-p")
+        .arg(object_path.to_str().context("failed in converting object path to string")?)
         .env("LANG", "C")
         .env("LC_ALL", "C")
         .output()?;

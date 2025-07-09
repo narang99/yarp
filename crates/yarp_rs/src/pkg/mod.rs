@@ -9,10 +9,11 @@ use crate::{
     node::Node,
     pkg::{
         export::{Export, mk_parent_dirs},
-        patch::LibPatch,
         paths::ExportedFileTree,
     },
 };
+
+pub use patch::LibPatch;
 
 pub mod bootstrap;
 pub mod export;
@@ -32,7 +33,7 @@ pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()>
         )
     })?;
 
-    mk_symlink_farm(node, deps, dist).with_context(|| {
+    let symlink_farm = mk_symlink_farm(node, deps, dist).with_context(|| {
         format!(
             "could not create symlink farm for path={} dist={}",
             node.path.display(),
@@ -41,19 +42,33 @@ pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()>
     })?;
 
     // todo: chain from mk_symlink_farm directly, it should return the path like reals
-    node.pkg
-        .symlink_farm(&node.path, dist)
+    symlink_farm
+        .as_ref()
         .map(|p| -> Result<()> {
             match real_path {
-                Some(ref real_path) => node.deps.patch(real_path, &p),
+                Some(ref real_path) => node.deps.patch(real_path, &p).with_context(|| {
+                    anyhow!(
+                        "failed in patching shared library at node_path={} real_path={} symlink_farm={}",
+                        node.path.display(),
+                        real_path.display(),
+                        p.display()
+                    )
+                }),
                 None => Ok(()),
             }
         })
-        .transpose()?;
+        .transpose()
+        .with_context(|| {
+            anyhow!(
+                "failed in patching library for node, path={}",
+                node.path.display()
+            )
+        })?;
 
-    let path_to_cp_to_destination = real_path.unwrap_or(node.path.clone());
-    node.pkg
-        .destination(&node.path, dist)
+    let path_to_cp_to_destination = real_path.as_ref().unwrap_or(&node.path);
+    let destination = node.pkg.destination(&node.path, dist);
+    destination
+        .as_ref()
         .map(|dest| {
             node.pkg
                 .to_destination(&path_to_cp_to_destination, &dest, &dist)
@@ -67,6 +82,18 @@ pub fn move_to_dist(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<()>
             )
         })?;
 
+    if let (Some(dest_path), Some(symlink_farm_path), Some(real_path)) = (
+        destination.as_ref(),
+        symlink_farm.as_ref(),
+        real_path.as_ref(),
+    ) {
+        // hack: this is very bad
+        // need better code for this
+        node.deps.patch_for_destination(dest_path, real_path, symlink_farm_path).with_context(|| {
+            anyhow!("failure in patching destination for destination={} real_path={} symlink_farm={}", dest_path.display(), real_path.display(), symlink_farm_path.display())
+        })?;
+    }
+
     Ok(())
 }
 
@@ -74,26 +101,38 @@ fn mk_reals(node: &Node, dist: &PathBuf) -> Result<Option<PathBuf>> {
     node.pkg
         .reals(&node, dist)
         .map(|dest| -> Result<PathBuf> {
-            mk_parent_dirs(&dest)
-                .with_context(|| anyhow!("failed in creating parent dirs for destination, dest={}", dest.display()))?;
+            mk_parent_dirs(&dest).with_context(|| {
+                anyhow!(
+                    "failed in creating parent dirs for destination, dest={}",
+                    dest.display()
+                )
+            })?;
             if dest.exists() {
                 fs::remove_file(&dest).with_context(|| {
-                    anyhow!("failed in removing existing file at destination, dest={}", dest.display())
+                    anyhow!(
+                        "failed in removing existing file at destination, dest={}",
+                        dest.display()
+                    )
                 })?;
             }
-            fs::copy(&node.path, &dest)
-                .with_context(|| anyhow!("failed in copying reals to destination, dest={}", dest.display()))?;
+            fs::copy(&node.path, &dest).with_context(|| {
+                anyhow!(
+                    "failed in copying reals to destination, dest={}",
+                    dest.display()
+                )
+            })?;
             Ok(dest)
         })
         .transpose()
 }
 
 // todo: return path
-fn mk_symlink_farm(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<Option<()>> {
-    node.pkg.symlink_farm(&node.path, dist).map(|symlink_dir| -> Result<()> {
+fn mk_symlink_farm(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<Option<PathBuf>> {
+    node.pkg.symlink_farm(&node.path, dist).map(|symlink_dir| -> Result<PathBuf> {
         fs::create_dir_all(&symlink_dir)?;
         for dep in deps {
             let dep_reals_path = dep.pkg.reals(&dep, dist);
+            // println!("dep of node={}, path={} reals={:?}", node.path.display(), dep.path.display(), dep_reals_path);
             match dep_reals_path {
                 None => {},
                 Some(dep_reals_path) => {
@@ -115,6 +154,6 @@ fn mk_symlink_farm(node: &Node, deps: &Vec<Node>, dist: &PathBuf) -> Result<Opti
                 }
             };
         }
-        Ok(())
+        Ok(symlink_dir)
     }).transpose()
 }

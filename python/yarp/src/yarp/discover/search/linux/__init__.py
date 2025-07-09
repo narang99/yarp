@@ -5,7 +5,6 @@ from typing import Optional
 import os
 
 from yarp.discover.search.linux.ldconfig import ldconfig_find
-from yarp.discover.search.linux.ldd import ldd_find
 from yarp.discover.search.linux.rpath import get_rpaths, parse_rpath
 
 
@@ -95,10 +94,6 @@ def _search(
         Path("/usr/lib"),
     ]
     found = _find_in_dirs(name, std_lib_dirs)
-    if found:
-        return found
-
-    found = ldd_find(name)
     if found:
         return found
 

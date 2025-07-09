@@ -102,7 +102,6 @@ impl<T: Factory> FileGraph<T> {
         let mut all_parent_idx = Vec::new();
         for p in deps {
             if let Some(parent_idx) = self.idx_by_path.get_by_right(&p) {
-                println!("parent index exists");
                 all_parent_idx.push(*parent_idx);
                 continue;
             }

@@ -7,13 +7,13 @@ use crate::{
     digest::make_digest,
     manifest::Version,
     node::{Pkg, PrefixBinary, PrefixPlain},
-    pkg::paths::is_shared_library,
 };
 
 pub fn get_exec_prefix_pkg(
     path: &PathBuf,
     original_prefix: &PathBuf,
     version: &Version,
+    is_shared_library: bool,
 ) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
         anyhow!(
@@ -24,7 +24,7 @@ pub fn get_exec_prefix_pkg(
     })?;
     let original_prefix = original_prefix.clone();
     let version = version.clone();
-    if is_shared_library(path) {
+    if is_shared_library {
         Ok(Pkg::ExecPrefixBinary(PrefixBinary {
             original_prefix,
             version,
@@ -40,7 +40,7 @@ pub fn get_exec_prefix_pkg(
     }
 }
 
-pub fn get_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, version: &Version) -> Result<Pkg> {
+pub fn get_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, version: &Version, is_shared_library: bool) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &original_prefix).ok_or_else(|| {
         anyhow!(
             "failed in finding relative path of file inside prefix file={} prefix={}",
@@ -50,7 +50,7 @@ pub fn get_prefix_pkg(path: &PathBuf, original_prefix: &PathBuf, version: &Versi
     })?;
     let original_prefix = original_prefix.clone();
     let version = version.clone();
-    if is_shared_library(path) {
+    if is_shared_library {
         Ok(Pkg::PrefixBinary(PrefixBinary {
             original_prefix,
             version,
@@ -71,6 +71,7 @@ pub fn get_site_packages_pkg(
     site_pkg_path: &PathBuf,
     alias: &str,
     _version: &Version,
+    is_shared_library: bool,
 ) -> Result<Pkg> {
     let rel_path = diff_paths(&path, &site_pkg_path).ok_or_else(|| {
         anyhow!(
@@ -81,7 +82,7 @@ pub fn get_site_packages_pkg(
     })?;
     let site_packages = site_pkg_path.clone();
     let alias = alias.to_string();
-    if is_shared_library(path) {
+    if is_shared_library {
         Ok(Pkg::SitePackagesBinary {
             site_packages,
             alias,

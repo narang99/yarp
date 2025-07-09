@@ -77,9 +77,10 @@ class Python:
 @dataclass(frozen=True)
 class Skip:
     prefixes: list[str]
+    libs: list[str]
     
     def to_dict(self) -> dict[str, Any]:
-        return {"prefixes": self.prefixes}
+        return {"prefixes": self.prefixes, "libs": self.libs}
 
 
 

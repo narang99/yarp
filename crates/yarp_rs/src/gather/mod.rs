@@ -28,7 +28,7 @@ pub fn build_graph_from_manifest(
         manifest.python.sys.executable.clone(),
         cwd.clone(),
         manifest.env.clone(),
-        manifest.skip.prefixes.clone(),
+        manifest.skip.clone(),
     );
     let g = build_graph(manifest, &factory, &site_pkgs)?;
 
@@ -51,12 +51,14 @@ fn build_graph(
         executable_path.display()
     );
     // extra search paths for executable will be empty
+    // always serial
     g.add_tree(
         factory.make_py_executable(executable_path)?,
         &known_libs,
         true,
         &Vec::new(),
     )?;
+
 
     let executable_extra_paths_to_search = g
         .get_node_by_path(executable_path)
@@ -67,25 +69,9 @@ fn build_graph(
         .unwrap()
         .deps
         .paths_to_add_for_next_search();
-    let trypath = PathBuf::from(
-        "/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/cv2/cv2.cpython-39-x86_64-linux-gnu.so",
-    );
 
-    factory
-        .make(&trypath, &known_libs, &executable_extra_paths_to_search)
-        .and_then(|n| {
-            add_to_graph_if_some(
-                &mut g,
-                n,
-                &known_libs,
-                true,
-                &executable_extra_paths_to_search,
-            )
-        })?;
-    for n in g.iter_nodes() {
-        println!("cv2 nodeee {}", n.path.display());
-    }
     // now add all loads, in the correct order, again, should not fail
+    // always serial
     for l in &manifest.loads {
         info!(
             "adding load detected in manifest, path={}",
@@ -261,6 +247,19 @@ fn add_nodes_recursive(
     let mut i = 0;
     let total = paths.len();
 
+    // TODO: filter out all plain files (!is_maybe_shared_library()) and do them in parallel
+    // we can parallelize the shared library gather to some extent (it would end up doing duplicate node parsing and creation though)
+    // since graph is not safe to use across threads, its difficult to keep track of what all is made
+    // we can create a function which takes a list of known nodes and generates a fresh graph for given nodes in parallel
+    // then we can do batches and keep updating the list of known nodes
+
+    // path_by_node = graph.path_by_node
+    // batch = nodes[:10]
+    // batches = nodes(n batches of size k each)
+    // parallel: for batch in batches:
+        // small_graph = generate_graph(batch, path_by_node)
+    // graph.extend(small_graph)
+
     for p in paths {
         if !replace {
             if let Some(_) = g.get_node_by_path(&p) {
@@ -282,7 +281,7 @@ fn add_nodes_recursive(
             }
         }
         i += 1;
-        if i % (total / 10) == 0 {
+        if total / 10 != 0 && i % (total / 10) == 0 {
             info!("graph: pass 1: {}/{} nodes", i, total);
         }
     }

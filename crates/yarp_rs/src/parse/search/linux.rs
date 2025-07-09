@@ -26,6 +26,7 @@ pub fn search(
     ld_preload: &Vec<PathBuf>,
     ld_library_path: &Vec<PathBuf>,
     cwd: &PathBuf,
+    object_path: &PathBuf,
 ) -> Option<PathBuf> {
     // this function intentionally does not fail
     // we simply log warnings if there is a failure as rpath resolution is always about trying multiple stuff
@@ -66,7 +67,7 @@ pub fn search(
         ]
     );
 
-    if let Ok(path) = ldd::find(name) {
+    if let Ok(path) = ldd::find(name, object_path) {
         return Some(path)
     }
 

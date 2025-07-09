@@ -44,7 +44,7 @@ pub fn mk_nodes_parallel(
                     }
                 }
                 i += 1;
-                if i % (total / 10) == 0 {
+                if total / 10 != 0 && i % (total / 10) == 0 {
                     info!("thread: {} exported {}/{} files", thread_idx, i, total);
                 }
             }

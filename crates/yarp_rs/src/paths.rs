@@ -98,3 +98,17 @@ pub fn split_colon_separated_into_valid_search_paths(term: Option<&String>) -> V
         }
     }
 }
+
+
+pub fn get_lib_name(path: &PathBuf) -> Result<String> {
+    let lib_name = path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| {
+            anyhow!(
+                "failed in getting real file name for path={}",
+                path.display()
+            )
+        })?;
+    Ok(lib_name.to_string())
+}

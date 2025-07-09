@@ -53,7 +53,6 @@ pub mod site_pkgs;
 
 fn main() {
     env_logger::init();
-    dbg!(PathBuf::from("/home/users/hariom.narang/miniconda3/envs/platform/lib/python3.9/site-packages/opencv_python.libs/libfreetype-8d3bcff4.so.6.14.0").file_name());
     let start_time = std::time::Instant::now();
     export_files();
     let duration = start_time.elapsed();
@@ -75,7 +74,6 @@ fn export_files() {
     let (graph, path_components) =
         build_graph_from_manifest(&manifest, &cwd).expect("failed in building graph");
     let dist = cwd.join("dist");
-    info!("path components: {:?}", path_components);
     if dist.exists() {
         info!("found existing dist, removing. path={}", dist.display());
         std::fs::remove_dir_all(&dist).expect(&format!(
@@ -105,11 +103,12 @@ fn move_all_nodes(graph: &FileGraph<NodeFactory>, dist: &PathBuf) {
     info!("exporting files to dist");
     let total = graph.len();
     let mut i = 0;
+    // TODO: parallelize this (we need custom toposort implementation)
     for node in graph.toposort().unwrap() {
         let deps = graph.get_node_dependencies(&node);
         move_to_dist(&node, &deps, dist).unwrap();
         i += 1;
-        if i % (total / 10) == 0 {
+        if total / 10 != 0 && i % (total / 10) == 0 {
             info!("exported {}/{} files", i, total);
         }
     }

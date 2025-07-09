@@ -6,16 +6,10 @@ use log::info;
 pub use crate::factory::core::Factory;
 
 use crate::{
-    digest::make_digest,
-    factory::{
+    digest::make_digest, factory::{
         deps::create_deps,
         pkg::{get_exec_prefix_pkg, get_prefix_pkg, get_site_packages_pkg},
-    },
-    manifest::Version,
-    node::{Node, Pkg, deps::Deps},
-    paths::normalize_path,
-    pkg::paths::is_shared_library,
-    site_pkgs::SitePkgs,
+    }, manifest::{Skip, Version}, node::{deps::Deps, Node, Pkg}, paths::normalize_path, pkg::paths::is_maybe_shared_library, site_pkgs::SitePkgs
 };
 
 #[derive(Debug, Clone)]
@@ -25,7 +19,7 @@ pub struct NodeFactory {
     executable: PathBuf,
     cwd: PathBuf,
     env: HashMap<String, String>,
-    skip_prefixes: Vec<PathBuf>,
+    skip: Skip,
 }
 
 impl NodeFactory {
@@ -35,7 +29,7 @@ impl NodeFactory {
         executable: PathBuf,
         cwd: PathBuf,
         env: HashMap<String, String>,
-        skip_prefixes: Vec<PathBuf>,
+        skip: Skip,
     ) -> NodeFactory {
         Self {
             site_pkgs,
@@ -43,7 +37,7 @@ impl NodeFactory {
             executable: executable,
             cwd: cwd,
             env,
-            skip_prefixes,
+            skip,
         }
     }
 }
@@ -65,13 +59,30 @@ impl NodeFactory {
         )
     }
 
-    fn should_skip(&self, path: &PathBuf) -> bool {
-        for prefix in &self.skip_prefixes {
+    fn should_skip(&self, path: &PathBuf, is_shared_library: bool) -> bool {
+        for prefix in &self.skip.prefixes {
             if path.starts_with(prefix) {
                 return true;
             }
         }
+        if is_shared_library && self.is_path_in_skipped_shared_libs(path) {
+            return true;
+        }
         false
+    }
+
+    fn is_path_in_skipped_shared_libs(&self, path: &PathBuf) -> bool {
+        match path.file_name().and_then(|file_name| file_name.to_str()) {
+            Some(s) => {
+                for lib in &self.skip.libs {
+                    if lib.trim() == s {
+                        return true;
+                    }
+                }
+                false
+            }
+            None => false,
+        }
     }
 }
 
@@ -83,15 +94,17 @@ impl Factory for NodeFactory {
         known_libs: &HashMap<String, PathBuf>,
         extra_search_paths: &Vec<PathBuf>,
     ) -> Result<Option<Node>> {
-        if self.should_skip(path) {
-            info!("skip: {}", path.display());
-            return Ok(None);
-        }
-        if !is_shared_library(path) {
+        let deps = self.create_deps(&path, known_libs, extra_search_paths)?;
+        let is_shared_library = deps.is_shared_library();
+        if !is_shared_library {
             bail!(
                 "cannot make_with_symlinks if the path is not a shared library, path={}",
                 path.display()
             );
+        }
+        if self.should_skip(path, is_shared_library) {
+            info!("skip: {}", path.display());
+            return Ok(None);
         }
         Ok(Some(Node::new(
             path.clone(),
@@ -99,7 +112,7 @@ impl Factory for NodeFactory {
                 symlinks: symlinks.clone(),
                 sha: make_digest(path)?,
             },
-            self.create_deps(path, known_libs, extra_search_paths)?,
+            deps,
         )?))
     }
 
@@ -110,7 +123,7 @@ impl Factory for NodeFactory {
         extra_search_paths: &Vec<PathBuf>,
     ) -> Result<Option<Node>> {
         let p = normalize_path(path);
-        if self.should_skip(&p) {
+        if self.should_skip(&p, is_maybe_shared_library(&p)) {
             info!("skip: {}", p.display());
             return Ok(None);
         }
@@ -121,19 +134,21 @@ impl Factory for NodeFactory {
             );
         }
 
+        let deps = self.create_deps(&p, known_libs, extra_search_paths)?;
+        let is_shared_library = deps.is_shared_library();
         if p.starts_with(&self.site_pkgs.lib_dynload) {
             return Ok(Some(Node::new(
                 p.clone(),
-                get_exec_prefix_pkg(&p, &self.site_pkgs.lib_dynload, &self.version)?,
-                self.create_deps(&p, known_libs, extra_search_paths)?,
+                get_exec_prefix_pkg(&p, &self.site_pkgs.lib_dynload, &self.version, is_shared_library)?,
+                deps,
             )?));
         }
 
         if p.starts_with(&self.site_pkgs.stdlib) {
             return Ok(Some(Node::new(
                 p.clone(),
-                get_prefix_pkg(&p, &self.site_pkgs.stdlib, &self.version)?,
-                self.create_deps(&p, known_libs, extra_search_paths)?,
+                get_prefix_pkg(&p, &self.site_pkgs.stdlib, &self.version, is_shared_library)?,
+                deps,
             )?));
         }
 
@@ -141,25 +156,24 @@ impl Factory for NodeFactory {
             if p.starts_with(site_pkg) {
                 return Ok(Some(Node::new(
                     p.clone(),
-                    get_site_packages_pkg(&p, site_pkg, alias, &self.version)?,
-                    self.create_deps(&p, known_libs, extra_search_paths)?,
+                    get_site_packages_pkg(&p, site_pkg, alias, &self.version, is_shared_library)?,
+                    deps,
                 )?));
             }
         }
 
-        if !is_shared_library(&p) {
+        if !is_shared_library {
             bail!(
                 "found a path which is not inside site packages and is not a shared library. Only plain files inside site-packages are allowed, path={}",
                 p.display()
             );
         }
-
         Ok(Some(Node::new(
             p.clone(),
             Pkg::Binary {
                 sha: make_digest(&p)?,
             },
-            self.create_deps(&p, known_libs, extra_search_paths)?,
+            deps,
         )?))
     }
 

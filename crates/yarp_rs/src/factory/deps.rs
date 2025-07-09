@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 
-use crate::{node::deps::Deps, parse::BinaryParseError, pkg::paths::is_shared_library};
+use crate::{node::deps::Deps, parse::BinaryParseError, pkg::paths::is_maybe_shared_library};
 
 pub fn create_deps(
     path: &PathBuf,
@@ -12,7 +12,7 @@ pub fn create_deps(
     known_libs: &HashMap<String, PathBuf>,
     extra_search_paths: &Vec<PathBuf>,
 ) -> Result<Deps> {
-    if is_shared_library(path) {
+    if is_maybe_shared_library(path) {
         let bin = crate::parse::parse_and_search(
             path,
             executable_path,

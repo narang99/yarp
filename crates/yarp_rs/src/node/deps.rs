@@ -96,6 +96,13 @@ impl Deps {
     pub fn mock(deps: Vec<PathBuf>) -> Deps {
         Deps::Mock { paths: deps }
     }
+
+    pub fn is_shared_library(&self) -> bool {
+        match self {
+            Deps::Binary(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[cfg(test)]

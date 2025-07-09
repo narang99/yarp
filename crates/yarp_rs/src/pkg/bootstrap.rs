@@ -2,7 +2,7 @@
 
 use std::{fs, path::PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, bail, Context, Result};
 use log::info;
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
     pkg::paths::{lib_dynload_relative_path, site_pkgs_relative_path, stdlib_relative_path},
 };
 
-const BOOTSTRAP_SCRIPT: &str = r#"
+const MAC_BOOTSTRAP_SCRIPT: &str = r#"
 #!/bin/bash
 set -euo pipefail
 
@@ -35,6 +35,38 @@ echo "PYTHONPATH=$PYTHONPATH"
 exec "$SCRIPT_DIR/python/bin/python" "$@"
 "#;
 
+// possible fix for linux being weird
+// $ORIGIN is set to the actual path in linux (the symlink), not the realpath
+// this is breaking dependency resolution for us
+// export LD_ORIGIN_PATH="$SCRIPT_DIR/reals/r"
+// the above might hardcode ORIGIN to our thing, might be useful
+// as everything really is just relative to the reals directory
+// we mostly don't need additional rpath patching too maybe?
+
+const LINUX_BOOTSTRAP_SCRIPT: &str = r#"
+#!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "bootstrap directory: $SCRIPT_DIR"
+
+ORIGINAL_LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$SCRIPT_DIR/lib/l:$ORIGINAL_LD_LIBRARY_PATH"
+echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+
+SITE_PKG_REL_PATHS={{SITE_PKGS_REPLACEMENT}}
+
+export PYTHONPATH=""
+for path in "${SITE_PKG_REL_PATHS[@]}"; do 
+    export PYTHONPATH="$PYTHONPATH:$SCRIPT_DIR/$path"
+done
+
+echo "PYTHONPATH=$PYTHONPATH"
+
+exec "$SCRIPT_DIR/python/bin/python" "$@"
+"#;
+
+
 pub fn write_bootstrap_script(
     dist: &PathBuf,
     comps: &Vec<PythonPathComponent>,
@@ -49,7 +81,19 @@ pub fn write_bootstrap_script(
             comps, version
         )
     })?;
-    let script = BOOTSTRAP_SCRIPT.replace("{{SITE_PKGS_REPLACEMENT}}", &comps_array);
+    let os = std::env::consts::OS;
+    let script = match os {
+        "macos" => {
+            MAC_BOOTSTRAP_SCRIPT.replace("{{SITE_PKGS_REPLACEMENT}}", &comps_array)
+        },
+        "linux" => {
+            LINUX_BOOTSTRAP_SCRIPT.replace("{{SITE_PKGS_REPLACEMENT}}", &comps_array)
+        },
+        _ => {
+            bail!("unsupported OS: {}", os);
+        }
+    };
+        
     fs::write(script_path, script)?;
     info!("bootstrap script written");
     Ok(())

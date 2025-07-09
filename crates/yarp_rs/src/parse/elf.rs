@@ -57,6 +57,7 @@ fn do_parse(
             &ld_preload,
             &ld_library_path,
             cwd,
+            object_path,
         ) {
             None => {
                 if let Some(known_path) = known_libs.get(lib) {

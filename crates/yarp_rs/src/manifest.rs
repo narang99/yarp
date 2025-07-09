@@ -17,9 +17,10 @@ pub struct YarpManifest {
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Skip {
     pub prefixes: Vec<PathBuf>,
+    pub libs: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,7 +34,6 @@ pub enum LoadKind {
 /// they would be kept in ld-library-path
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Load {
-
     pub kind: LoadKind,
     pub path: PathBuf,
     pub symlinks: Vec<String>,
@@ -94,7 +94,8 @@ mod test {
     "skip": {
         "prefixes": [
             "/miniconda/pygraphviz"
-        ]
+        ],
+        "libs": []
     },
     "python": {
         "sys": {
